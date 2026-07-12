@@ -4,6 +4,12 @@ A custom terminal status line for the Claude Code CLI: model, reasoning effort,
 context-window usage, 5-hour rate-limit usage, git branch, session cost, and
 prompt-cache warmth.
 
+The status line renders on every update from the session JSON Claude Code pipes
+to it on stdin:
+
+    Opus 4.8 max · █░░░░░░░░░  12% · 123k/1m · 5h  30% · ⎇ main ·  $4.04 · ⧗ 40m
+
+
 ## Requirements
 
 - bash, jq, awk, git
@@ -23,12 +29,7 @@ Add this to ~/.claude/settings.json (existing keys are preserved):
 
     "statusLine": { "type": "command", "command": "bash ~/.claude/statusline.sh" }
 
-## Usage
-
-The status line renders on every update from the session JSON Claude Code pipes
-to it on stdin:
-
-    Opus 4.8 max · █░░░░░░░░░  12% · 123k/1m · 5h  30% · ⎇ main ·  $4.04 · ⧗ 40m
+## Content
 
 | Segment | Meaning |
 |---|---|
