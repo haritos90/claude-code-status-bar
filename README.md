@@ -1,4 +1,4 @@
-# claude-code-status-bar
+# Claude Code status bar
 
 A custom terminal status line for the Claude Code CLI: model, reasoning effort,
 context-window usage, 5-hour rate-limit usage, git branch, session cost, and
@@ -62,11 +62,3 @@ Edit statusline.sh:
 `cost.total_cost_usd` is the API-rate value of the session's tokens, not a
 subscription charge.
 
-## Development
-
-- Tasks: Backlog.md (`backlog board`, `backlog browser`); agent workflow in
-  AGENTS.md.
-
-## License
-
-MIT. See LICENSE.
