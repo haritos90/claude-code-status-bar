@@ -76,8 +76,9 @@ fi
 
 # cache warmth — time until the prompt cache likely expires. The TTL is DETECTED
 # from the transcript: which bucket cache writes went to (ephemeral_1h vs
-# ephemeral_5m), newest write wins; falls back to CC_TTL (default 5m) before any
-# write. "⧗ Nm" (green) = warm, reuse soon; "⧗ ∞" (dim) = expired, no rush.
+# ephemeral_5m), newest write wins; falls back to CC_TTL (default 1h — the TTL
+# subscription sessions always get) before any write. "⧗ Nm" (green) = warm,
+# reuse soon; "⧗ —" (dim) = expired, the next request rewrites the history.
 # Reflects the last render, not a live idle tick.
 tpath=$(j '.transcript_path // ""')
 if [ -n "$tpath" ] && [ -f "$tpath" ]; then
@@ -89,13 +90,15 @@ if [ -n "$tpath" ] && [ -f "$tpath" ]; then
                  | if (.ephemeral_1h_input_tokens // 0) > 0 then 3600
                    elif (.ephemeral_5m_input_tokens // 0) > 0 then 300
                    else empty end' 2>/dev/null | tail -1)
-  [ -n "$ttl" ] || ttl=${CC_TTL:-300}
+  # task-8: superseded — [ -n "$ttl" ] || ttl=${CC_TTL:-300}
+  [ -n "$ttl" ] || ttl=${CC_TTL:-3600}
   if [ -n "$mt" ]; then
     idle=$(( $(date +%s) - mt ))
     if [ "$idle" -lt "$ttl" ]; then
       out="${out}${sep}$(col 0)⧗ $(pad 3 "$(( (ttl - idle + 59) / 60 ))m")${R}"
     else
-      out="${out}${sep}${DIM}⧗ $(pad 3 "∞")${R}"
+      # task-8: superseded — out="${out}${sep}${DIM}⧗ $(pad 3 "∞")${R}"
+      out="${out}${sep}${DIM}⧗ $(pad 3 "—")${R}"
     fi
   fi
 fi
