@@ -40,10 +40,14 @@ Add this to ~/.claude/settings.json (existing keys are preserved):
 | `5h 30%` | Rolling 5-hour rate-limit usage |
 | `⎇ main` | Git branch; long names truncated (`CC_BRANCH_MAX`) |
 | `$4.04` | Session cost at API rates; omitted when zero |
-| `⧗ 40m` | Prompt-cache warmth: minutes the cache stays warm (`⧗ ∞` when expired) |
+| `⧗ 40m` | Prompt-cache warmth: minutes the cache stays warm (`⧗ —` when expired) |
 
 Numeric segments are right-padded to a fixed width, so the line does not shift
 as values change digit count.
+
+The warmth countdown reflects the state at the last render. Claude Code
+re-renders the line on session activity only, so the value does not tick down
+while the session is idle.
 
 Exercise it without a live session:
 
@@ -57,7 +61,7 @@ Edit statusline.sh:
 |---|---|---|
 | `CELLS` | `10` | Context bar width in cells |
 | `col()` thresholds | `50` / `80` | Amber and red percentage boundaries |
-| `CC_TTL` | `300` | Fallback cache TTL (seconds), used before any cache write is seen |
+| `CC_TTL` | `3600` | Fallback cache TTL (seconds), used before any cache write is seen; subscription sessions always cache with the 1-hour TTL, set `300` for API-key accounts |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
 
 `cost.total_cost_usd` is the API-rate value of the session's tokens, not a
