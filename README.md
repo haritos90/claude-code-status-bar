@@ -7,7 +7,7 @@ prompt-cache warmth.
 The status line renders on every update from the session JSON Claude Code pipes
 to it on stdin:
 
-    Opus 4.8 max · █░░░░░░░░░  12% · 123k/1m · 5h  30% · ⎇ main ·  $4.04 · ⧗ 40m
+    Opus 4.8 max · █░░░░░░░  12% · 123k/1m · 5h  30% · ⎇ main ·  $4.04 · ⧗ 40m
 
 
 ## Requirements
@@ -59,7 +59,7 @@ Edit statusline.sh:
 
 | Option | Default | Description |
 |---|---|---|
-| `CELLS` | `10` | Context bar width in cells |
+| `CELLS` | `8` | Context bar width in cells |
 | `col()` thresholds | `50` / `80` | Amber and red percentage boundaries |
 | `CC_TTL` | `3600` | Fallback cache TTL (seconds), used before any cache write is seen; subscription sessions always cache with the 1-hour TTL, set `300` for API-key accounts |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
