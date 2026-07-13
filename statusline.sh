@@ -36,9 +36,12 @@ while [ "$i" -lt "$filled" ]; do fstr="${fstr}█"; i=$((i+1)); done
 i=0; while [ "$i" -lt $((CELLS - filled)) ]; do estr="${estr}░"; i=$((i+1)); done
 bar="${C}${fstr}${DIM}${estr}${R}"
 
+# task-11: LC_ALL=C pins the decimal radix to a period on the %.1fm branch; under
+# a comma locale awk would emit '1,2m'. The token count is a dot-formatted integer
+# and the output is ASCII, so only the numeric radix is forced (LC_CTYPE untouched).
 fmt() {
   local n=$1
-  if   [ "$n" -ge 1000000 ]; then awk -v n="$n" 'BEGIN{v=n/1000000; if(v==int(v))printf"%dm",v;else printf"%.1fm",v}'
+  if   [ "$n" -ge 1000000 ]; then LC_ALL=C awk -v n="$n" 'BEGIN{v=n/1000000; if(v==int(v))printf"%dm",v;else printf"%.1fm",v}'
   elif [ "$n" -ge 1000 ];    then awk -v n="$n" 'BEGIN{printf"%dk",int(n/1000+0.5)}'
   else printf '%d' "$n"
   fi
@@ -70,9 +73,11 @@ if [ -n "$cwd" ]; then
   fi
 fi
 
-# cost
-if awk -v c="$cost" 'BEGIN{exit !(c+0 > 0.0001)}'; then
-  out="${out}${sep}${DIM}$(pad 7 "$(printf '$%.2f' "$cost")")${R}"
+# cost — task-11: LC_ALL=C so the dotted JSON value is parsed and formatted with a
+# period. A comma-locale printf fails on '1.23' with 'invalid number', and the awk
+# guard would misparse a sub-dollar cost to 0 and hide the segment.
+if LC_ALL=C awk -v c="$cost" 'BEGIN{exit !(c+0 > 0.0001)}'; then
+  out="${out}${sep}${DIM}$(pad 7 "$(LC_ALL=C printf '$%.2f' "$cost")")${R}"
 fi
 
 # cache warmth — time until the prompt cache likely expires. The TTL is DETECTED
