@@ -25,8 +25,9 @@ pad() { printf "%${1}s" "$2"; }   # right-align $2 to width $1 (fixed-width segm
 C=$(col "$pct")
 sep=" ${DIM}·${R} "
 
-# --- context bar (10 cells) ---
-CELLS=10
+# --- context bar ---
+# task-9: superseded — CELLS=10
+CELLS=8
 filled=$(( (${pct:-0} * CELLS + 50) / 100 ))
 [ "$filled" -gt "$CELLS" ] && filled=$CELLS
 [ "$filled" -lt 0 ] && filled=0
