@@ -163,6 +163,19 @@ fi
 #   fi
 # fi
 
+# task-21: announce a just-applied self-update once. task-20's background writes the
+# new version to CACHE_DIR/applied-version after an atomic replace; show a ⇧ vX.Y
+# marker on the next render and record it in announced-version so it shows only once.
+# Reads state from the previous run; no network, outside the fixed-width segments.
+if [ -f "$CACHE_DIR/applied-version" ]; then
+  av=$(cat "$CACHE_DIR/applied-version" 2>/dev/null)
+  ann=$(cat "$CACHE_DIR/announced-version" 2>/dev/null)
+  if [ -n "$av" ] && [ "$av" != "$ann" ]; then
+    out="${out}${sep}$(col 0)⇧ v${av}${R}"
+    printf '%s' "$av" > "$CACHE_DIR/announced-version" 2>/dev/null
+  fi
+fi
+
 printf '%s' "$out"
 
 # task-20: spawn the once-a-day self-update, fully detached so it never delays this
