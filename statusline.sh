@@ -2,6 +2,7 @@
 # Claude Code status line — model · effort · context bar · 5h limit · git · cost.
 # All values come from the JSON on stdin. Numeric segments are right-padded to a
 # fixed width so the line does not shift as values change digit count.
+VERSION=1.1  # task-19: current release; the updater compares it against the latest tag
 input=$(cat)
 j() { printf '%s' "$input" | jq -r "$1" 2>/dev/null; }
 
