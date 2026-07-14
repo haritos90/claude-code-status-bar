@@ -97,32 +97,30 @@ if LC_ALL=C awk -v c="$cost" 'BEGIN{exit !(c+0 > 0.0001)}'; then
   out="${out}${sep}${DIM}$(pad 7 "$(LC_ALL=C printf '$%.2f' "$cost")")${R}"
 fi
 
-# cache warmth — time until the prompt cache likely expires. The TTL is DETECTED
-# from the transcript: which bucket cache writes went to (ephemeral_1h vs
-# ephemeral_5m), newest write wins; falls back to CC_TTL (default 1h — the TTL
-# subscription sessions always get) before any write. "⧗ Nm" (green) = warm,
-# reuse soon; "⧗ —" (dim) = expired, the next request rewrites the history.
-# Reflects the last render, not a live idle tick. tpath is read once near the top.
-if [ -n "$tpath" ] && [ -f "$tpath" ]; then
-  mt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null)
-  case "$mt" in ''|*[!0-9]*) mt="" ;; esac
-  ttl=$(tail -n 2000 "$tpath" 2>/dev/null | tail -n +2 \
-        | jq -c 'select(.type=="assistant" and ((.message.usage.cache_creation_input_tokens // 0) > 0))
-                 | .message.usage.cache_creation
-                 | if (.ephemeral_1h_input_tokens // 0) > 0 then 3600
-                   elif (.ephemeral_5m_input_tokens // 0) > 0 then 300
-                   else empty end' 2>/dev/null | tail -1)
-  # task-8: superseded — [ -n "$ttl" ] || ttl=${CC_TTL:-300}
-  [ -n "$ttl" ] || ttl=${CC_TTL:-3600}
-  if [ -n "$mt" ]; then
-    idle=$(( $(date +%s) - mt ))
-    if [ "$idle" -lt "$ttl" ]; then
-      out="${out}${sep}$(col 0)⧗ $(pad 3 "$(( (ttl - idle + 59) / 60 ))m")${R}"
-    else
-      # task-8: superseded — out="${out}${sep}${DIM}⧗ $(pad 3 "∞")${R}"
-      out="${out}${sep}${DIM}⧗ $(pad 3 "—")${R}"
-    fi
-  fi
-fi
+# task-16: superseded — cache-warmth (⧗) segment removed to save status-line width.
+# Analysis shows Claude Code sessions cache with a 1h TTL essentially always, so a
+# constantly-shown countdown adds little actionable value. The block is kept
+# commented for a possible restore; CC_TTL no longer affects the output.
+# if [ -n "$tpath" ] && [ -f "$tpath" ]; then
+#   mt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null)
+#   case "$mt" in ''|*[!0-9]*) mt="" ;; esac
+#   ttl=$(tail -n 2000 "$tpath" 2>/dev/null | tail -n +2 \
+#         | jq -c 'select(.type=="assistant" and ((.message.usage.cache_creation_input_tokens // 0) > 0))
+#                  | .message.usage.cache_creation
+#                  | if (.ephemeral_1h_input_tokens // 0) > 0 then 3600
+#                    elif (.ephemeral_5m_input_tokens // 0) > 0 then 300
+#                    else empty end' 2>/dev/null | tail -1)
+#   # task-8: superseded — [ -n "$ttl" ] || ttl=${CC_TTL:-300}
+#   [ -n "$ttl" ] || ttl=${CC_TTL:-3600}
+#   if [ -n "$mt" ]; then
+#     idle=$(( $(date +%s) - mt ))
+#     if [ "$idle" -lt "$ttl" ]; then
+#       out="${out}${sep}$(col 0)⧗ $(pad 3 "$(( (ttl - idle + 59) / 60 ))m")${R}"
+#     else
+#       # task-8: superseded — out="${out}${sep}${DIM}⧗ $(pad 3 "∞")${R}"
+#       out="${out}${sep}${DIM}⧗ $(pad 3 "—")${R}"
+#     fi
+#   fi
+# fi
 
 printf '%s' "$out"
