@@ -53,6 +53,43 @@ fmt() {
   fi
 }
 
+# --- self-update (task-20, decision-1) -------------------------------------
+# Opt-out via CC_AUTO_UPDATE=0. At most once per day a detached background process
+# checks the latest GitHub release and, when it is newer than VERSION, atomically
+# replaces this script with the tagged statusline.sh. It never blocks the render;
+# all failures are silent. State lives under CACHE_DIR. The trigger at the end of
+# the script decides whether to spawn self_update.
+CC_REPO="haritos90/claude-code-status-bar"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/claude-code-status-bar"
+
+vgt() { # exit 0 iff $1 is strictly newer than $2 (dotted numeric versions)
+  awk -v a="$1" -v b="$2" 'BEGIN{
+    na=split(a,A,"."); nb=split(b,B,".");
+    n=(na>nb?na:nb);
+    for(i=1;i<=n;i++){x=(i<=na?A[i]+0:0);y=(i<=nb?B[i]+0:0);
+      if(x>y)exit 0; if(x<y)exit 1}
+    exit 1}'
+}
+
+self_update() { # detached background; silent; never surfaces failures
+  local tag latest self dir tmp
+  tag=$(curl -fsSL --max-time 10 "https://api.github.com/repos/$CC_REPO/releases/latest" 2>/dev/null \
+        | jq -r '.tag_name // empty' 2>/dev/null)
+  [ -n "$tag" ] || return 0
+  latest=${tag#v}
+  vgt "$latest" "$VERSION" || return 0             # only ever move forward
+  self="${SELF:-$0}"; [ -f "$self" ] || return 0   # SELF overridable for tests
+  dir=$(dirname "$self")
+  tmp=$(mktemp "$dir/.statusline.XXXXXX" 2>/dev/null) || return 0
+  if curl -fsSL --max-time 20 "https://raw.githubusercontent.com/$CC_REPO/$tag/statusline.sh" -o "$tmp" 2>/dev/null \
+     && [ -s "$tmp" ] && bash -n "$tmp" 2>/dev/null; then
+    chmod +x "$tmp" 2>/dev/null
+    mv -f "$tmp" "$self" 2>/dev/null && printf '%s' "$latest" > "$CACHE_DIR/applied-version" 2>/dev/null
+  else
+    rm -f "$tmp" 2>/dev/null
+  fi
+}
+
 # fallback marker — Claude Code records an automatic model switch as an assistant
 # "fallback" content block {from,to} (e.g. the selected model is unavailable). The
 # stdin .model reflects the effective model, so it silently disagrees with the
@@ -127,3 +164,17 @@ fi
 # fi
 
 printf '%s' "$out"
+
+# task-20: spawn the once-a-day self-update, fully detached so it never delays this
+# render (the network runs in the background; the foreground work here is only a
+# stat and a touch). The stamp is written now so a failed or slow check still waits
+# a day before retrying. Guarded by CC_AUTO_UPDATE (opt-out) and curl's presence.
+if [ "${CC_AUTO_UPDATE:-1}" != "0" ] && command -v curl >/dev/null 2>&1; then
+  stamp="$CACHE_DIR/last-check"; now=$(date +%s); last=0
+  [ -f "$stamp" ] && last=$(stat -c %Y "$stamp" 2>/dev/null || stat -f %m "$stamp" 2>/dev/null || printf 0)
+  case "$last" in ''|*[!0-9]*) last=0 ;; esac
+  if [ "$(( now - last ))" -ge 86400 ]; then
+    mkdir -p "$CACHE_DIR" 2>/dev/null && : > "$stamp" 2>/dev/null
+    ( self_update & ) </dev/null >/dev/null 2>&1
+  fi
+fi
