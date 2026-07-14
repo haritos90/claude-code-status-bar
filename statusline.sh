@@ -17,10 +17,10 @@ modelid=$(j '.model.id // ""')
 tpath=$(j '.transcript_path // ""')
 
 R=$'\033[0m'; DIM=$'\033[38;2;120;120;120m'; BOLD=$'\033[1m'
-col() { # pct -> ANSI color (green / amber / red)
-  if   [ "${1:-0}" -ge 80 ]; then printf '\033[38;2;225;95;75m'
-  elif [ "${1:-0}" -ge 50 ]; then printf '\033[38;2;240;190;70m'
-  else                            printf '\033[38;2;120;190;120m'
+col() { # pct -> ANSI color; task-17: amber/red boundaries via CC_AMBER/CC_RED
+  if   [ "${1:-0}" -ge "${CC_RED:-80}" ]; then printf '\033[38;2;225;95;75m'
+  elif [ "${1:-0}" -ge "${CC_AMBER:-50}" ]; then printf '\033[38;2;240;190;70m'
+  else printf '\033[38;2;120;190;120m'
   fi
 }
 pad() { printf "%${1}s" "$2"; }   # right-align $2 to width $1 (fixed-width segments)
@@ -30,7 +30,9 @@ sep=" ${DIM}·${R} "
 # --- context bar ---
 # task-9: superseded — CELLS=10
 # task-14: superseded — CELLS=8
-CELLS=7
+# task-17: CC_CELLS overrides the width so an auto-update does not clobber a chosen
+# value; the default reproduces the prior fixed CELLS=7.
+CELLS=${CC_CELLS:-7}
 filled=$(( (${pct:-0} * CELLS + 50) / 100 ))
 [ "$filled" -gt "$CELLS" ] && filled=$CELLS
 [ "$filled" -lt 0 ] && filled=0

@@ -55,12 +55,13 @@ Exercise it without a live session:
 
 ## Configuration
 
-Edit statusline.sh:
+Set these as environment variables in the `statusLine.command`, for example
+`"command": "CC_CELLS=10 bash ~/.claude/statusline.sh"`:
 
 | Option | Default | Description |
 |---|---|---|
-| `CELLS` | `8` | Context bar width in cells |
-| `col()` thresholds | `50` / `80` | Amber and red percentage boundaries |
+| `CC_CELLS` | `7` | Context bar width in cells |
+| `CC_AMBER` / `CC_RED` | `50` / `80` | Amber and red context-fill percentage boundaries |
 | `CC_TTL` | `3600` | Fallback cache TTL (seconds), used before any cache write is seen; subscription sessions always cache with the 1-hour TTL, set `300` for API-key accounts |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
 
