@@ -47,6 +47,7 @@ it against the script's embedded `VERSION`. Updates require `curl`.
 
 | Segment | Meaning |
 |---|---|
+| `●` | Recent-activity dot (opt-in `CC_DOT`); breathing orange while active, dim green when idle |
 | `Opus 4.8` | Model; the ` (1M context)` suffix is trimmed |
 | `max` | Reasoning effort; omitted when absent |
 | bar + `12%` | Context-window fill; green below 50, amber 50–79, red 80 and above |
@@ -74,7 +75,23 @@ Set these as environment variables in the `statusLine.command`, for example
 | `CC_AMBER` / `CC_RED` | `50` / `80` | Amber and red context-fill percentage boundaries |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
 | `CC_AUTO_UPDATE` | `1` | Self-update from GitHub releases; set `0` to disable |
+| `CC_DOT` | `0` | Leading recent-activity dot; set `1` to enable (needs `refreshInterval`) |
+| `CC_BUSY_WINDOW` | `10` | Seconds of quiet before the activity dot turns from orange to green |
 
 `cost.total_cost_usd` is the API-rate value of the session's tokens, not a
 subscription charge.
+
+## Activity dot
+
+An optional leading dot reflects recent session activity. Enable it with `CC_DOT=1`
+and add `"refreshInterval": 1` so the line re-renders while the session is idle:
+
+    "statusLine": { "type": "command", "command": "CC_DOT=1 bash ~/.claude/statusline.sh", "refreshInterval": 1 }
+
+The dot breathes orange while the session has produced model output or written to the
+transcript within the last `CC_BUSY_WINDOW` seconds, and turns a dim green once it goes
+quiet. The status JSON exposes no real-time activity flag, so the state is inferred from
+accumulated API time and transcript writes: a long single response or a long silent tool
+run may briefly read as idle. Without `refreshInterval` the dot updates only on session
+events and does not settle to green while idle.
 

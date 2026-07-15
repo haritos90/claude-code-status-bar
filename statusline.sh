@@ -2,7 +2,7 @@
 # Claude Code status line — model · effort · context bar · 5h limit · git · cost.
 # All values come from the JSON on stdin. Numeric segments are right-padded to a
 # fixed width so the line does not shift as values change digit count.
-VERSION=1.1  # task-19: current release; the updater compares it against the latest tag
+VERSION=1.2  # task-19: current release; the updater compares it against the latest tag
 input=$(cat)
 j() { printf '%s' "$input" | jq -r "$1" 2>/dev/null; }
 
@@ -104,8 +104,37 @@ if [ -n "$tpath" ] && [ -f "$tpath" ] && [ -n "$modelid" ]; then
   [ "$fbto" = "$modelid" ] && fbmark=" $(col 50)⤵${R}"
 fi
 
+# --- activity dot (task-24) — leading indicator of recent session activity. The
+# status JSON exposes no real-time "busy" flag, so activity is inferred from the two
+# fields that only advance while the model works: cost.total_api_duration_ms and the
+# transcript mtime. Per-session state (keyed by session_id, since one script serves
+# every concurrent session) persists under CACHE_DIR between renders. Opt-in via
+# CC_DOT=1; a refreshInterval in settings.json lets idle renders settle it to green.
+# The orange pulse is time-driven, independent of what triggered the render.
+dot=""
+if [ "${CC_DOT:-0}" = "1" ]; then
+  sid=$(j '.session_id // "default"')
+  api=$(j '.cost.total_api_duration_ms // 0'); case "$api" in ''|*[!0-9]*) api=0 ;; esac
+  amt=0; [ -n "$tpath" ] && amt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null || printf 0)
+  case "$amt" in ''|*[!0-9]*) amt=0 ;; esac
+  win=${CC_BUSY_WINDOW:-10}; anow=$(date +%s); af="$CACHE_DIR/activity-$sid"
+  pa=$api pm=$amt la=$((anow - win - 1))                 # first render defaults to idle
+  [ -f "$af" ] && IFS=' ' read -r pa pm la < "$af" 2>/dev/null
+  case "$pa" in ''|*[!0-9]*) pa=$api ;; esac
+  case "$pm" in ''|*[!0-9]*) pm=$amt ;; esac
+  case "$la" in ''|*[!0-9]*) la=$anow ;; esac
+  { [ "$api" -gt "$pa" ] || [ "$amt" -gt "$pm" ]; } && la=$anow   # advanced since last render -> active
+  mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s\n' "$api" "$amt" "$la" > "$af" 2>/dev/null
+  if [ "$((anow - la))" -le "$win" ]; then
+    lvl=$(( anow % 6 )); [ "$lvl" -gt 3 ] && lvl=$(( 6 - lvl ))   # 0,1,2,3,2,1 triangle over 6s
+    dot="$(printf '\033[38;2;235;%s;55m' "$(( 120 + lvl * 18 ))")●${R} "   # breathing orange = active
+  else
+    dot="$(printf '\033[38;2;110;150;110m')●${R} "                         # calm dim green = idle
+  fi
+fi
+
 # --- assemble (fixed widths: pct 4, tokens 4, 5h 4, cost 7) ---
-out="${BOLD}${model}${R}${fbmark}"
+out="${dot}${BOLD}${model}${R}${fbmark}"
 [ -n "$effort" ] && out="${out} ${DIM}${effort}${R}"
 out="${out}${sep}${bar} ${C}$(pad 4 "${pct}%")${R}${sep}${DIM}$(pad 4 "$(fmt "$used")")/$(fmt "$total")${R}"
 
