@@ -1,12 +1,13 @@
 # Claude Code status bar
 
 A custom terminal status line for the Claude Code CLI: model, reasoning effort,
-context-window usage, 5-hour rate-limit usage, and git branch.
+context-window usage, session token throughput, 5-hour rate-limit usage, and git
+branch.
 
 The status line renders on every update from the session JSON Claude Code pipes
 to it on stdin:
 
-    Opus 4.8 max · █░░░░░░  12% · 123k/1m · 5h  30% · ⎇ main
+    Opus 4.8 max · █░░░░░░  12% · 123k/1m · r:2.2m w:15k · 5h  30% · ⎇ main
 
 
 ## Requirements
@@ -52,6 +53,7 @@ it against the script's embedded `VERSION`. Updates require `curl`.
 | `max` | Reasoning effort; omitted when absent |
 | bar + `12%` | Context-window fill; green below 50, amber 50–79, red 80 and above |
 | `123k/1m` | Tokens in context / context-window size; the count takes the fill color when the bar is collapsed |
+| `r:2.2m w:15k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); hidden with `CC_TOKENS=0` |
 | `5h 30%` | Rolling 5-hour rate-limit usage |
 | `⎇ main` | Git branch; long names truncated (`CC_BRANCH_MAX`) |
 | `⇧ v1.2` | Shown once after a self-update, naming the new version |
@@ -59,11 +61,13 @@ it against the script's embedded `VERSION`. Updates require `curl`.
 Numeric segments are right-padded to a fixed width, so the line does not shift
 as values change digit count.
 
-When the assembled line is wider than the terminal, the context bar is dropped and
-its fill color moves onto the token count; if it still does not fit, the percentage is
-dropped too, leaving only the colored token count. The widest form that fits is shown.
-This reads the terminal width from the `COLUMNS` variable Claude Code exports
-(2.1.153+); when it is absent, or with `CC_COMPACT=0`, the full bar is always shown.
+When the assembled line is wider than the terminal it collapses in priority order: first
+the session `w:` (write) figure is dropped, then `r:` (read) — removing the throughput
+segment; then the context bar is dropped and its fill color moves onto the token count;
+finally the percentage is dropped too, leaving only the colored token count. The widest
+form that fits is shown. This reads the terminal width from the `COLUMNS` variable Claude
+Code exports (2.1.153+); when it is absent, or with `CC_COMPACT=0`, the full line is always
+shown.
 
 Exercise it without a live session:
 
@@ -83,6 +87,7 @@ Set these as environment variables in the `statusLine.command`, for example
 |---|---|---|
 | `CC_CELLS` | `7` | Context bar width in cells |
 | `CC_COMPACT` | `1` | Collapse the bar to fit the terminal width; set `0` to always keep the full bar |
+| `CC_TOKENS` | `1` | Show the cumulative session read/write token segment; set `0` to hide it |
 | `CC_AMBER` / `CC_RED` | `50` / `80` | Amber and red context-fill percentage boundaries |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
 | `CC_AUTO_UPDATE` | `1` | Self-update from GitHub releases; set `0` to disable |
