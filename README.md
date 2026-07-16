@@ -1,18 +1,19 @@
 # Claude Code status bar
 
 A custom terminal status line for the Claude Code CLI: model, reasoning effort,
-context-window usage, 5-hour rate-limit usage, git branch, and session cost.
+context-window usage, 5-hour rate-limit usage, and git branch.
 
 The status line renders on every update from the session JSON Claude Code pipes
 to it on stdin:
 
-    Opus 4.8 max · █░░░░░░  12% · 123k/1m · 5h  30% · ⎇ main ·   $4.04
+    Opus 4.8 max · █░░░░░░  12% · 123k/1m · 5h  30% · ⎇ main
 
 
 ## Requirements
 
 - bash, jq, awk, git; curl for installation and auto-update
-- Claude Code 2.1 or newer
+- Claude Code 2.1 or newer (2.1.153+ to collapse the line into narrow terminals; on
+  older versions the full bar is always shown)
 
 ## Installation
 
@@ -47,22 +48,31 @@ it against the script's embedded `VERSION`. Updates require `curl`.
 
 | Segment | Meaning |
 |---|---|
-| `●` | Recent-activity dot (opt-in `CC_DOT`); breathing orange while active, dim green when idle |
 | `Opus 4.8` | Model; the ` (1M context)` suffix is trimmed |
 | `max` | Reasoning effort; omitted when absent |
 | bar + `12%` | Context-window fill; green below 50, amber 50–79, red 80 and above |
-| `123k/1m` | Tokens in context / context-window size |
+| `123k/1m` | Tokens in context / context-window size; the count takes the fill color when the bar is collapsed |
 | `5h 30%` | Rolling 5-hour rate-limit usage |
 | `⎇ main` | Git branch; long names truncated (`CC_BRANCH_MAX`) |
-| `$4.04` | Session cost at API rates; omitted when zero |
 | `⇧ v1.2` | Shown once after a self-update, naming the new version |
 
 Numeric segments are right-padded to a fixed width, so the line does not shift
 as values change digit count.
 
+When the assembled line is wider than the terminal, the context bar is dropped and
+its fill color moves onto the token count; if it still does not fit, the percentage is
+dropped too, leaving only the colored token count. The widest form that fits is shown.
+This reads the terminal width from the `COLUMNS` variable Claude Code exports
+(2.1.153+); when it is absent, or with `CC_COMPACT=0`, the full bar is always shown.
+
 Exercise it without a live session:
 
-    echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."},"cost":{"total_cost_usd":4.04}}' | bash statusline.sh
+    echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | bash statusline.sh
+
+Constrain the width to watch it collapse — the bar drops and the token count takes the
+fill color:
+
+    echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | COLUMNS=50 bash statusline.sh
 
 ## Configuration
 
@@ -72,26 +82,8 @@ Set these as environment variables in the `statusLine.command`, for example
 | Option | Default | Description |
 |---|---|---|
 | `CC_CELLS` | `7` | Context bar width in cells |
+| `CC_COMPACT` | `1` | Collapse the bar to fit the terminal width; set `0` to always keep the full bar |
 | `CC_AMBER` / `CC_RED` | `50` / `80` | Amber and red context-fill percentage boundaries |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
 | `CC_AUTO_UPDATE` | `1` | Self-update from GitHub releases; set `0` to disable |
-| `CC_DOT` | `0` | Leading recent-activity dot; set `1` to enable (needs `refreshInterval`) |
-| `CC_BUSY_WINDOW` | `10` | Seconds of quiet before the activity dot turns from orange to green |
-
-`cost.total_cost_usd` is the API-rate value of the session's tokens, not a
-subscription charge.
-
-## Activity dot
-
-An optional leading dot reflects recent session activity. Enable it with `CC_DOT=1`
-and add `"refreshInterval": 1` so the line re-renders while the session is idle:
-
-    "statusLine": { "type": "command", "command": "CC_DOT=1 bash ~/.claude/statusline.sh", "refreshInterval": 1 }
-
-The dot breathes orange while the session has produced model output or written to the
-transcript within the last `CC_BUSY_WINDOW` seconds, and turns a dim green once it goes
-quiet. The status JSON exposes no real-time activity flag, so the state is inferred from
-accumulated API time and transcript writes: a long single response or a long silent tool
-run may briefly read as idle. Without `refreshInterval` the dot updates only on session
-events and does not settle to green while idle.
 
