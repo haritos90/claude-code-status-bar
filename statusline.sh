@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Claude Code status line — model · effort · context bar · 5h limit · git · cost.
+# Claude Code status line — model · effort · context bar · 5h limit · git.
 # All values come from the JSON on stdin. Numeric segments are right-padded to a
 # fixed width so the line does not shift as values change digit count.
-VERSION=1.2  # task-19: current release; the updater compares it against the latest tag
+VERSION=1.3  # task-19: current release; the updater compares it against the latest tag
 input=$(cat)
 j() { printf '%s' "$input" | jq -r "$1" 2>/dev/null; }
 
@@ -13,7 +13,7 @@ total=$(j '.context_window.context_window_size // 200000')
 pct=$(j '.context_window.used_percentage // 0'); pct=${pct%.*}
 lim5=$(j '.rate_limits.five_hour.used_percentage // empty'); lim5=${lim5%.*}
 cwd=$(j '.workspace.current_dir // .cwd // ""')
-cost=$(j '.cost.total_cost_usd // 0')
+# task-25: superseded — cost=$(j '.cost.total_cost_usd // 0')
 modelid=$(j '.model.id // ""')
 tpath=$(j '.transcript_path // ""')
 
@@ -104,44 +104,55 @@ if [ -n "$tpath" ] && [ -f "$tpath" ] && [ -n "$modelid" ]; then
   [ "$fbto" = "$modelid" ] && fbmark=" $(col 50)⤵${R}"
 fi
 
-# --- activity dot (task-24) — leading indicator of recent session activity. The
-# status JSON exposes no real-time "busy" flag, so activity is inferred from the two
-# fields that only advance while the model works: cost.total_api_duration_ms and the
-# transcript mtime. Per-session state (keyed by session_id, since one script serves
-# every concurrent session) persists under CACHE_DIR between renders. Opt-in via
-# CC_DOT=1; a refreshInterval in settings.json lets idle renders settle it to green.
-# The orange pulse is time-driven, independent of what triggered the render.
-dot=""
-if [ "${CC_DOT:-0}" = "1" ]; then
-  sid=$(j '.session_id // "default"')
-  api=$(j '.cost.total_api_duration_ms // 0'); case "$api" in ''|*[!0-9]*) api=0 ;; esac
-  amt=0; [ -n "$tpath" ] && amt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null || printf 0)
-  case "$amt" in ''|*[!0-9]*) amt=0 ;; esac
-  win=${CC_BUSY_WINDOW:-10}; anow=$(date +%s); af="$CACHE_DIR/activity-$sid"
-  pa=$api pm=$amt la=$((anow - win - 1))                 # first render defaults to idle
-  [ -f "$af" ] && IFS=' ' read -r pa pm la < "$af" 2>/dev/null
-  case "$pa" in ''|*[!0-9]*) pa=$api ;; esac
-  case "$pm" in ''|*[!0-9]*) pm=$amt ;; esac
-  case "$la" in ''|*[!0-9]*) la=$anow ;; esac
-  { [ "$api" -gt "$pa" ] || [ "$amt" -gt "$pm" ]; } && la=$anow   # advanced since last render -> active
-  mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s\n' "$api" "$amt" "$la" > "$af" 2>/dev/null
-  if [ "$((anow - la))" -le "$win" ]; then
-    lvl=$(( anow % 6 )); [ "$lvl" -gt 3 ] && lvl=$(( 6 - lvl ))   # 0,1,2,3,2,1 triangle over 6s
-    dot="$(printf '\033[38;2;235;%s;55m' "$(( 120 + lvl * 18 ))")●${R} "   # breathing orange = active
-  else
-    dot="$(printf '\033[38;2;110;150;110m')●${R} "                         # calm dim green = idle
-  fi
-fi
+# task-27 (decision-2): superseded — the activity dot is removed. Its signals
+# (cost.total_api_duration_ms and the transcript mtime) advance only at message and
+# tool boundaries, and the statusLine renders only at message completion plus the
+# refreshInterval timer with no real-time busy field, so across a long generation span
+# the dot decayed to green while the model was still working. A reliable indicator
+# needs out-of-band lifecycle hooks (see decision-2). Kept commented for a restore.
+# dot=""
+# if [ "${CC_DOT:-0}" = "1" ]; then
+#   sid=$(j '.session_id // "default"')
+#   api=$(j '.cost.total_api_duration_ms // 0'); case "$api" in ''|*[!0-9]*) api=0 ;; esac
+#   amt=0; [ -n "$tpath" ] && amt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null || printf 0)
+#   case "$amt" in ''|*[!0-9]*) amt=0 ;; esac
+#   win=${CC_BUSY_WINDOW:-10}; anow=$(date +%s); af="$CACHE_DIR/activity-$sid"
+#   pa=$api pm=$amt la=$((anow - win - 1))                 # first render defaults to idle
+#   [ -f "$af" ] && IFS=' ' read -r pa pm la < "$af" 2>/dev/null
+#   case "$pa" in ''|*[!0-9]*) pa=$api ;; esac
+#   case "$pm" in ''|*[!0-9]*) pm=$amt ;; esac
+#   case "$la" in ''|*[!0-9]*) la=$anow ;; esac
+#   { [ "$api" -gt "$pa" ] || [ "$amt" -gt "$pm" ]; } && la=$anow   # advanced since last render -> active
+#   mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s\n' "$api" "$amt" "$la" > "$af" 2>/dev/null
+#   if [ "$((anow - la))" -le "$win" ]; then
+#     lvl=$(( anow % 6 )); [ "$lvl" -gt 3 ] && lvl=$(( 6 - lvl ))   # 0,1,2,3,2,1 triangle over 6s
+#     dot="$(printf '\033[38;2;235;%s;55m' "$(( 120 + lvl * 18 ))")●${R} "   # breathing orange = active
+#   else
+#     dot="$(printf '\033[38;2;110;150;110m')●${R} "                         # calm dim green = idle
+#   fi
+# fi
 
-# --- assemble (fixed widths: pct 4, tokens 4, 5h 4, cost 7) ---
-out="${dot}${BOLD}${model}${R}${fbmark}"
-[ -n "$effort" ] && out="${out} ${DIM}${effort}${R}"
-out="${out}${sep}${bar} ${C}$(pad 4 "${pct}%")${R}${sep}${DIM}$(pad 4 "$(fmt "$used")")/$(fmt "$total")${R}"
+# --- assemble (fixed widths: pct 4, tokens 4, 5h 4) ---
+# task-27 (decision-2): superseded — head="${dot}${BOLD}${model}${R}${fbmark}"
+head="${BOLD}${model}${R}${fbmark}"
+[ -n "$effort" ] && head="${head} ${DIM}${effort}${R}"
 
+# task-26: three width tiers for the context segment (each carries its leading sep).
+# ctx0 (full) is the bar + colored pct + dim tokens, as before. Under width pressure
+# the bar is dropped (ctx1: colored pct + colored token count), then the pct too
+# (ctx2: colored token count only). The used figure takes the fill color the bar
+# otherwise carried; the denominator stays dim. The widest tier that fits is chosen
+# after the whole line is assembled (see the COLUMNS check below).
+ctx0="${sep}${bar} ${C}$(pad 4 "${pct}%")${R}${sep}${DIM}$(pad 4 "$(fmt "$used")")/$(fmt "$total")${R}"
+ctx1="${sep}${C}$(pad 4 "${pct}%")${R}${sep}${C}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+ctx2="${sep}${C}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+
+# rest — everything after the context segment; independent of the chosen tier.
+rest=""
 # 5-hour rate-limit usage
 if [ -n "$lim5" ]; then
   LC=$(col "$lim5")
-  out="${out}${sep}${DIM}5h ${R}${LC}$(pad 4 "${lim5}%")${R}"
+  rest="${rest}${sep}${DIM}5h ${R}${LC}$(pad 4 "${lim5}%")${R}"
 fi
 
 # git branch — symbolic-ref shows the real branch even on an unborn/empty branch
@@ -155,16 +166,19 @@ if [ -n "$cwd" ]; then
   if [ -n "$br" ]; then
     BRMAX=${CC_BRANCH_MAX:-18}
     [ "${#br}" -gt "$BRMAX" ] && br="${br:0:$((BRMAX-1))}…"
-    out="${out}${sep}${DIM}⎇ ${br}${R}"
+    rest="${rest}${sep}${DIM}⎇ ${br}${R}"
   fi
 fi
 
+# task-25: superseded — the cost segment (the API-rate value of the session's tokens,
+# not a subscription charge) is removed to save fixed width. Kept commented for a
+# possible restore.
 # cost — task-11: LC_ALL=C so the dotted JSON value is parsed and formatted with a
 # period. A comma-locale printf fails on '1.23' with 'invalid number', and the awk
 # guard would misparse a sub-dollar cost to 0 and hide the segment.
-if LC_ALL=C awk -v c="$cost" 'BEGIN{exit !(c+0 > 0.0001)}'; then
-  out="${out}${sep}${DIM}$(pad 7 "$(LC_ALL=C printf '$%.2f' "$cost")")${R}"
-fi
+# if LC_ALL=C awk -v c="$cost" 'BEGIN{exit !(c+0 > 0.0001)}'; then
+#   out="${out}${sep}${DIM}$(pad 7 "$(LC_ALL=C printf '$%.2f' "$cost")")${R}"
+# fi
 
 # task-16: superseded — cache-warmth (⧗) segment removed to save status-line width.
 # Analysis shows Claude Code sessions cache with a 1h TTL essentially always, so a
@@ -200,10 +214,26 @@ if [ -f "$CACHE_DIR/applied-version" ]; then
   av=$(cat "$CACHE_DIR/applied-version" 2>/dev/null)
   ann=$(cat "$CACHE_DIR/announced-version" 2>/dev/null)
   if [ -n "$av" ] && [ "$av" != "$ann" ]; then
-    out="${out}${sep}$(col 0)⇧ v${av}${R}"
+    rest="${rest}${sep}$(col 0)⇧ v${av}${R}"
     printf '%s' "$av" > "$CACHE_DIR/announced-version" 2>/dev/null
   fi
 fi
+
+# task-26: choose the widest context tier whose whole line fits $COLUMNS (Claude Code
+# exports it, >= 2.1.153). cols=0 (unset, older Claude Code) or CC_COMPACT=0 keeps the
+# full bar, matching the prior output. Visible width strips ANSI SGR and UTF-8
+# continuation bytes so each multi-byte cell (█ ░ · ⎇) counts as one column, and is
+# measured against the fully assembled line including 5h, branch, and markers.
+cols=${COLUMNS:-0}
+ctx="$ctx0"
+if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
+  for cand in "$ctx0" "$ctx1" "$ctx2"; do
+    ctx="$cand"
+    vis=$(printf '%s' "${head}${ctx}${rest}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
+    [ "$vis" -le "$cols" ] && break
+  done
+fi
+out="${head}${ctx}${rest}"
 
 printf '%s' "$out"
 

@@ -29,6 +29,25 @@ jobs:
           ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
 
+      # Guard: the updater fetches statusline.sh from raw at this tag and compares its
+      # embedded VERSION against the release tag. If the tag is ahead of the file's
+      # VERSION, every install re-downloads the same file daily without ever settling.
+      # Fail the release instead of shipping that; bump VERSION to match the tag first.
+      - name: Verify the tag matches the embedded VERSION
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          file_version=$(sed -n 's/^VERSION=\([0-9][0-9.]*\).*/\1/p' statusline.sh | head -1)
+          tag_version=${TAG#v}
+          if [ -z "$file_version" ]; then
+            echo "::error::statusline.sh has no VERSION= line"; exit 1
+          fi
+          if [ "$file_version" != "$tag_version" ]; then
+            echo "::error::tag $TAG (=$tag_version) != statusline.sh VERSION=$file_version — bump VERSION to $tag_version, commit, and retag"
+            exit 1
+          fi
+          echo "tag $TAG matches VERSION=$file_version"
+
       # Notes = the annotated tag message (or a one-line default for a lightweight
       # tag) + a changelog of commit subjects since the previous v* tag. `$TAG^`
       # starts the previous-tag search at the tagged commit's parent so the current
