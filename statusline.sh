@@ -132,7 +132,40 @@ fi
 #   fi
 # fi
 
-# --- assemble (fixed widths: pct 4, tokens 4, 5h 4) ---
+# --- session token throughput (task-32) -------------------------------------
+# Cumulative read/write across the transcript: read = Σ(input + cache_read +
+# cache_creation), write = Σ output. Shown by default after the context segment;
+# CC_TOKENS=0 opts out. Totals are memoized on the transcript's size+mtime in
+# CACHE_DIR/tokens-<sid>, so idle re-renders do no jq work; a full rescan runs only when
+# the transcript has grown (once per turn). jq streams with -n 'reduce(inputs)' (no
+# slurp). Compaction that prunes the transcript lowers the total. tok0/tok1 are the width
+# tiers (full / read-only); tok2 is empty (segment dropped). Hidden until a turn records
+# usage. The assembly below places the chosen tier between ctx and rest.
+tok0=""; tok1=""; tok2=""
+if [ "${CC_TOKENS:-1}" != "0" ] && [ -n "$tpath" ] && [ -f "$tpath" ]; then
+  sid=$(j '.session_id // "default"')
+  sz=$(stat -c %s "$tpath" 2>/dev/null || stat -f %z "$tpath" 2>/dev/null || printf 0)
+  mt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null || printf 0)
+  tf="$CACHE_DIR/tokens-$sid"; rd=0; wr=0; psz=""; pmt=""
+  [ -f "$tf" ] && IFS=' ' read -r psz pmt rd wr < "$tf" 2>/dev/null
+  case "$rd" in ''|*[!0-9]*) rd=0 ;; esac; case "$wr" in ''|*[!0-9]*) wr=0 ;; esac
+  if [ "$psz" != "$sz" ] || [ "$pmt" != "$mt" ]; then         # rescan only when it grew
+    IFS=$'\t' read -r rd wr < <(jq -n -r '
+      reduce (inputs | select(.type=="assistant") | .message.usage? // empty) as $u
+        ({r:0,w:0};
+             .r += (($u.input_tokens//0)+($u.cache_read_input_tokens//0)+($u.cache_creation_input_tokens//0))
+           | .w += ($u.output_tokens//0))
+      | "\(.r)\t\(.w)"' "$tpath" 2>/dev/null)
+    case "$rd" in ''|*[!0-9]*) rd=0 ;; esac; case "$wr" in ''|*[!0-9]*) wr=0 ;; esac
+    mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s %s\n' "$sz" "$mt" "$rd" "$wr" > "$tf" 2>/dev/null
+  fi
+  if [ "$rd" -gt 0 ] || [ "$wr" -gt 0 ]; then
+    tok0="${sep}${DIM}r:${R}$(pad 4 "$(fmt "$rd")") ${DIM}w:${R}$(pad 4 "$(fmt "$wr")")"
+    tok1="${sep}${DIM}r:${R}$(pad 4 "$(fmt "$rd")")"
+  fi
+fi
+
+# --- assemble (fixed widths: pct 4, tokens 4, r/w 4, 5h 4) ---
 # task-27 (decision-2): superseded — head="${dot}${BOLD}${model}${R}${fbmark}"
 head="${BOLD}${model}${R}${fbmark}"
 [ -n "$effort" ] && head="${head} ${DIM}${effort}${R}"
@@ -219,21 +252,28 @@ if [ -f "$CACHE_DIR/applied-version" ]; then
   fi
 fi
 
-# task-26: choose the widest context tier whose whole line fits $COLUMNS (Claude Code
-# exports it, >= 2.1.153). cols=0 (unset, older Claude Code) or CC_COMPACT=0 keeps the
-# full bar, matching the prior output. Visible width strips ANSI SGR and UTF-8
+# task-26: choose the widest context+tokens combination whose whole line fits $COLUMNS
+# (Claude Code exports it, >= 2.1.153). cols=0 (unset, older Claude Code) or CC_COMPACT=0
+# keeps the full bar, matching the prior output. Visible width strips ANSI SGR and UTF-8
 # continuation bytes so each multi-byte cell (█ ░ · ⎇) counts as one column, and is
-# measured against the fully assembled line including 5h, branch, and markers.
+# measured against the fully assembled line including tokens, 5h, branch, and markers.
+# task-32: the ladder now also collapses the token-throughput segment (tok0->tok1->tok2)
+# ahead of the context bar; see the pair list below.
 cols=${COLUMNS:-0}
-ctx="$ctx0"
+ctx="$ctx0"; tok="$tok0"
 if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
-  for cand in "$ctx0" "$ctx1" "$ctx2"; do
-    ctx="$cand"
-    vis=$(printf '%s' "${head}${ctx}${rest}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
+  # task-32: superseded — the collapse iterated context tiers only:
+  #   for cand in "$ctx0" "$ctx1" "$ctx2"; do ctx="$cand"; measure "${head}${ctx}${rest}"; done
+  # Now it walks (ctx,tok) pairs, dropping write, then read, then the bar, then the pct;
+  # with CC_TOKENS=0 the tok tiers are empty so it reduces to the prior ctx0/1/2 walk.
+  # Indirect ${!name} expands the tier variables named in each pair.
+  for pair in "ctx0 tok0" "ctx0 tok1" "ctx0 tok2" "ctx1 tok2" "ctx2 tok2"; do
+    cn=${pair% *}; tn=${pair#* }; ctx=${!cn}; tok=${!tn}
+    vis=$(printf '%s' "${head}${ctx}${tok}${rest}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
     [ "$vis" -le "$cols" ] && break
   done
 fi
-out="${head}${ctx}${rest}"
+out="${head}${ctx}${tok}${rest}"
 
 printf '%s' "$out"
 
