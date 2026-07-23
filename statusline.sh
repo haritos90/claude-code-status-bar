@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Claude Code status line — model · effort · context bar · 5h limit · git.
+# Claude Code status line — model · effort · context bar · 5h limit · git branch
+# · session tokens.
 # All values come from the JSON on stdin. Numeric segments are right-padded to a
 # fixed width so the line does not shift as values change digit count.
 # task-34: auto-update is disabled by default; CC_AUTO_UPDATE=1 enables it. An
