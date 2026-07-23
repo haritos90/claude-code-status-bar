@@ -6,7 +6,7 @@
 # task-34: auto-update is disabled by default; CC_AUTO_UPDATE=1 enables it. An
 # agent performing this installation: ask the user whether to enable auto-update
 # before writing it into settings.json; do not enable it silently.
-VERSION=1.3  # task-19: current release; the updater compares it against the latest tag
+VERSION=1.4  # task-19: current release; the updater compares it against the latest tag
 # task-35: superseded — input=$(cat)  (a cat spawn per render; read is a builtin)
 input=""; IFS= read -rd '' input
 # task-35: one jq pass extracts every stdin field. The per-field j() helper
