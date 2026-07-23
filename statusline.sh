@@ -191,20 +191,34 @@ if [ -n "$tpath" ] && [ -f "$tpath" ]; then
   esac
   [ -n "$szmt" ] || szmt="0 0"
   sz=${szmt% *}; mt=${szmt#* }
-  tf="$CACHE_DIR/tokens-$sid"; rd=0; wr=0; psz=""; pmt=""; fbto=""
-  [ -f "$tf" ] && IFS=' ' read -r psz pmt rd wr fbto < "$tf" 2>/dev/null
+  # task-43: the pass also carries the newest cache TTL (field order: sz mt rd wr
+  # ttl fbto — ttl is always numeric and sits before the possibly-empty fallback
+  # target so a blank target cannot shift fields; 0 = unknown). Pre-task-43 files
+  # put the target in the ttl slot; the numeric guard discards it and both fields
+  # heal on the next transcript change.
+  # task-43: superseded — [ -f "$tf" ] && IFS=' ' read -r psz pmt rd wr fbto < "$tf" 2>/dev/null
+  tf="$CACHE_DIR/tokens-$sid"; rd=0; wr=0; ttl=0; psz=""; pmt=""; fbto=""
+  [ -f "$tf" ] && IFS=' ' read -r psz pmt rd wr ttl fbto < "$tf" 2>/dev/null
   case "$rd" in ''|*[!0-9]*) rd=0 ;; esac; case "$wr" in ''|*[!0-9]*) wr=0 ;; esac
+  case "$ttl" in ''|*[!0-9]*) ttl=0 ;; esac
   if [ "$psz" != "$sz" ] || [ "$pmt" != "$mt" ]; then         # rescan only on change
-    IFS=$'\t' read -r rd wr fbto < <(jq -n -r '
+    IFS=$'\t' read -r rd wr ttl fbto < <(jq -n -r '
       reduce (inputs | select(.type=="assistant")) as $a
-        ({r:0, w:0, f:""};
+        ({r:0, w:0, t:0, f:""};
            ($a.message.usage? // {}) as $u
          | .r += (($u.input_tokens//0)+($u.cache_read_input_tokens//0)+($u.cache_creation_input_tokens//0))
          | .w += ($u.output_tokens//0)
+         | .t = (if ($u.cache_creation_input_tokens // 0) > 0
+                 then (if ($u.cache_creation.ephemeral_1h_input_tokens // 0) > 0 then 3600
+                       elif ($u.cache_creation.ephemeral_5m_input_tokens // 0) > 0 then 300
+                       else .t end)
+                 else .t end)
          | .f = (([$a.message.content[]? | select(.type=="fallback") | .to.model] | last) // .f))
-      | "\(.r)\t\(.w)\t\(.f)"' "$tpath" 2>/dev/null)
+      | "\(.r)\t\(.w)\t\(.t)\t\(.f)"' "$tpath" 2>/dev/null)
     case "$rd" in ''|*[!0-9]*) rd=0 ;; esac; case "$wr" in ''|*[!0-9]*) wr=0 ;; esac
-    mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s %s %s\n' "$sz" "$mt" "$rd" "$wr" "$fbto" > "$tf" 2>/dev/null
+    case "$ttl" in ''|*[!0-9]*) ttl=0 ;; esac
+    # task-43: superseded — printf '%s %s %s %s %s\n' "$sz" "$mt" "$rd" "$wr" "$fbto" > "$tf"
+    mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s %s %s %s\n' "$sz" "$mt" "$rd" "$wr" "$ttl" "$fbto" > "$tf" 2>/dev/null
   fi
   [ -n "$fbto" ] && [ "$fbto" = "$modelid" ] && fbmark=" $(col 50)⤵${R}"
   if [ "${CC_TOKENS:-1}" != "0" ] && { [ "$rd" -gt 0 ] || [ "$wr" -gt 0 ]; }; then
@@ -224,9 +238,23 @@ head="${BOLD}${model}${R}${fbmark}"
 # (ctx2: colored token count only). The used figure takes the fill color the bar
 # otherwise carried; the denominator stays dim. The widest tier that fits is chosen
 # after the whole line is assembled (see the COLUMNS check below).
-ctx0="${sep}${bar} ${C}$(pad 4 "${pct}%")${R}${sep}${DIM}$(pad 4 "$(fmt "$used")")/$(fmt "$total")${R}"
-ctx1="${sep}${C}$(pad 4 "${pct}%")${R}${sep}${C}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
-ctx2="${sep}${C}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+# task-43: while the prompt cache is cold — the session idled past the cache TTL
+# from the transcript pass (0 = unknown, defaults to 3600 s) — the used count
+# renders amber in every tier: those tokens will be rewritten into the cache by
+# the next request. Width and characters are unchanged; only the color shifts.
+UC=$DIM; UC1=$C
+if [ "${mt:-0}" -gt 0 ] 2>/dev/null; then
+  cttl=$ttl; [ "$cttl" -gt 0 ] 2>/dev/null || cttl=3600
+  if [ $(( now - mt )) -gt "$cttl" ]; then
+    UC=$'\033[38;2;240;190;70m'; UC1=$UC
+  fi
+fi
+# task-43: superseded — ctx0="${sep}${bar} ${C}$(pad 4 "${pct}%")${R}${sep}${DIM}$(pad 4 "$(fmt "$used")")/$(fmt "$total")${R}"
+# task-43: superseded — ctx1="${sep}${C}$(pad 4 "${pct}%")${R}${sep}${C}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+# task-43: superseded — ctx2="${sep}${C}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+ctx0="${sep}${bar} ${C}$(pad 4 "${pct}%")${R}${sep}${UC}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+ctx1="${sep}${C}$(pad 4 "${pct}%")${R}${sep}${UC1}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+ctx2="${sep}${UC1}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
 
 # rest — everything after the context segment; independent of the chosen tier.
 rest=""
