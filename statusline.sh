@@ -53,12 +53,12 @@ fmt() {
   fi
 }
 
-# --- self-update (task-20, decision-1) -------------------------------------
-# Opt-out via CC_AUTO_UPDATE=0. At most once per day a detached background process
-# checks the latest GitHub release and, when it is newer than VERSION, atomically
-# replaces this script with the tagged statusline.sh. It never blocks the render;
-# all failures are silent. State lives under CACHE_DIR. The trigger at the end of
-# the script decides whether to spawn self_update.
+# --- self-update (task-20, decision-1; opt-in per task-33, decision-3) ------
+# Disabled unless CC_AUTO_UPDATE=1. When enabled, at most once per day a detached
+# background process checks the latest GitHub release and, when it is newer than
+# VERSION, atomically replaces this script with the tagged statusline.sh. It never
+# blocks the render; all failures are silent. State lives under CACHE_DIR. The
+# trigger at the end of the script decides whether to spawn self_update.
 CC_REPO="haritos90/claude-code-status-bar"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/claude-code-status-bar"
 
@@ -280,8 +280,10 @@ printf '%s' "$out"
 # task-20: spawn the once-a-day self-update, fully detached so it never delays this
 # render (the network runs in the background; the foreground work here is only a
 # stat and a touch). The stamp is written now so a failed or slow check still waits
-# a day before retrying. Guarded by CC_AUTO_UPDATE (opt-out) and curl's presence.
-if [ "${CC_AUTO_UPDATE:-1}" != "0" ] && command -v curl >/dev/null 2>&1; then
+# a day before retrying. Guarded by CC_AUTO_UPDATE (opt-in, decision-3) and curl's
+# presence.
+# task-33: superseded — if [ "${CC_AUTO_UPDATE:-1}" != "0" ] && command -v curl >/dev/null 2>&1; then
+if [ "${CC_AUTO_UPDATE:-0}" = "1" ] && command -v curl >/dev/null 2>&1; then
   stamp="$CACHE_DIR/last-check"; now=$(date +%s); last=0
   [ -f "$stamp" ] && last=$(stat -c %Y "$stamp" 2>/dev/null || stat -f %m "$stamp" 2>/dev/null || printf 0)
   case "$last" in ''|*[!0-9]*) last=0 ;; esac
