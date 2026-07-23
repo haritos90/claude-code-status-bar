@@ -1,20 +1,20 @@
 # Claude Code status bar
 
 A custom terminal status line for the Claude Code CLI: model, reasoning effort,
-context-window usage, session token throughput, 5-hour rate-limit usage, and git
-branch.
+context-window usage, 5-hour rate-limit usage, git branch, and session token
+throughput.
 
 The status line renders on every update from the session JSON Claude Code pipes
-to it on stdin:
+to it on stdin. A live session looks like this:
 
-    Opus 4.8 max · █░░░░░░  12% · 123k/1m · r:2.2m w:15k · 5h  30% · ⎇ main
-
+    Opus 4.8 max · █░░░░░░  12% · 123k/1m ·  30% · ⎇ main · r:2.4m w: 16k
 
 ## Requirements
 
-- bash, jq, awk, git; curl for installation and auto-update
+- bash, jq, awk; curl for installation and auto-update. The git branch is read
+  from the repository's .git files directly, so the git binary is not required.
 - Claude Code 2.1 or newer (2.1.153+ to collapse the line into narrow terminals; on
-  older versions the full bar is always shown)
+  older versions the full line is always shown)
 
 ## Installation
 
@@ -58,31 +58,36 @@ manually.
 | `Opus 4.8` | Model; the ` (1M context)` suffix is trimmed |
 | `max` | Reasoning effort; omitted when absent |
 | bar + `12%` | Context-window fill; green below 50, amber 50–79, red 80 and above |
-| `123k/1m` | Tokens in context / context-window size; the count takes the fill color when the bar is collapsed |
-| `r:2.2m w:15k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); hidden with `CC_TOKENS=0` |
-| `5h 30%` | Rolling 5-hour rate-limit usage |
-| `⎇ main` | Git branch; long names truncated (`CC_BRANCH_MAX`) |
-| `⇧ v1.2` | Shown once after a self-update, naming the new version |
+| `123k/1m` | Tokens in context / context-window size. The count turns amber while the prompt cache is cold — the session has idled past the cache TTL (1h or 5m, read from the transcript), so the next request rewrites the whole context into the cache. When the bar is collapsed the count carries the fill color instead |
+| `30%` | Rolling 5-hour rate-limit usage, in the usual green/amber/red. A reset tail (`⟳2.4h`, `⟳45m`) appears when usage reaches `CC_RED` or the reset is within `CC_RESET_SOON` minutes |
+| `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`, shortened to `CC_BRANCH_MIN` under width pressure |
+| `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); hidden with `CC_TOKENS=0` |
+| `⇧ v1.4` | Shown once after a self-update, naming the new version |
 
 Numeric segments are right-padded to a fixed width, so the line does not shift
-as values change digit count.
+as values change digit count; the 5h reset tail is the exception and adds width
+only while it is shown.
 
-When the assembled line is wider than the terminal it collapses in priority order: first
-the session `w:` (write) figure is dropped, then `r:` (read) — removing the throughput
-segment; then the context bar is dropped and its fill color moves onto the token count;
-finally the percentage is dropped too, leaving only the colored token count. The widest
-form that fits is shown. This reads the terminal width from the `COLUMNS` variable Claude
-Code exports (2.1.153+); when it is absent, or with `CC_COMPACT=0`, the full line is always
-shown.
+When the assembled line is wider than the terminal it collapses in priority order:
+the session `w:` (write) figure is dropped, then `r:` (read); then the branch is
+shortened to `CC_BRANCH_MIN`; then the context bar is dropped and its fill color
+moves onto the token count; finally the percentage is dropped too. The widest form
+that fits is shown. This reads the terminal width from the `COLUMNS` variable Claude
+Code exports (2.1.153+); when it is absent, or with `CC_COMPACT=0`, the full line is
+always shown.
 
-Exercise it without a live session:
+Exercise it without a live session (from a checkout of this repository):
 
     echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | bash statusline.sh
+
+    Opus 4.8 max · █░░░░░░  12% · 123k/1m ·  30% · ⎇ main
 
 Constrain the width to watch it collapse — the bar drops and the token count takes the
 fill color:
 
     echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | COLUMNS=50 bash statusline.sh
+
+    Opus 4.8 max ·  12% · 123k/1m ·  30% · ⎇ main
 
 ## Configuration
 
@@ -92,9 +97,10 @@ Set these as environment variables in the `statusLine.command`, for example
 | Option | Default | Description |
 |---|---|---|
 | `CC_CELLS` | `7` | Context bar width in cells |
-| `CC_COMPACT` | `1` | Collapse the bar to fit the terminal width; set `0` to always keep the full bar |
+| `CC_COMPACT` | `1` | Collapse the line to fit the terminal width; set `0` to always keep the full line |
 | `CC_TOKENS` | `1` | Show the cumulative session read/write token segment; set `0` to hide it |
-| `CC_AMBER` / `CC_RED` | `50` / `80` | Amber and red context-fill percentage boundaries |
+| `CC_AMBER` / `CC_RED` | `50` / `80` | Amber and red percentage boundaries (context fill and 5h usage) |
+| `CC_RESET_SOON` | `15` | Minutes to the 5h reset under which the reset tail always shows |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
+| `CC_BRANCH_MIN` | `10` | Branch length when the collapse ladder shortens it |
 | `CC_AUTO_UPDATE` | `0` | Self-update from GitHub releases; set `1` to enable |
-
