@@ -3,19 +3,42 @@
 # All values come from the JSON on stdin. Numeric segments are right-padded to a
 # fixed width so the line does not shift as values change digit count.
 VERSION=1.3  # task-19: current release; the updater compares it against the latest tag
-input=$(cat)
-j() { printf '%s' "$input" | jq -r "$1" 2>/dev/null; }
-
-model=$(j '.model.display_name // .model.id // "?"'); model=${model% (1M context)}
-effort=$(j '.effort.level // empty')
-used=$(j '.context_window.total_input_tokens // 0')
-total=$(j '.context_window.context_window_size // 200000')
-pct=$(j '.context_window.used_percentage // 0'); pct=${pct%.*}
-lim5=$(j '.rate_limits.five_hour.used_percentage // empty'); lim5=${lim5%.*}
-cwd=$(j '.workspace.current_dir // .cwd // ""')
+# task-35: superseded — input=$(cat)  (a cat spawn per render; read is a builtin)
+input=""; IFS= read -rd '' input
+# task-35: one jq pass extracts every stdin field. The per-field j() helper
+# spawned a jq process per field (nine per render); terminal title bars that
+# display the tty's frontmost process flashed the names on every render. Absent
+# fields emit "" so the one-line-per-field contract holds; a failed jq leaves
+# every variable empty, matching the prior per-call failure mode.
+# task-35: superseded — j() { printf '%s' "$input" | jq -r "$1" 2>/dev/null; }
+# task-35: superseded — model=$(j '.model.display_name // .model.id // "?"')
+# task-35: superseded — effort=$(j '.effort.level // empty')
+# task-35: superseded — used=$(j '.context_window.total_input_tokens // 0')
+# task-35: superseded — total=$(j '.context_window.context_window_size // 200000')
+# task-35: superseded — pct=$(j '.context_window.used_percentage // 0')
+# task-35: superseded — lim5=$(j '.rate_limits.five_hour.used_percentage // empty')
+# task-35: superseded — cwd=$(j '.workspace.current_dir // .cwd // ""')
 # task-25: superseded — cost=$(j '.cost.total_cost_usd // 0')
-modelid=$(j '.model.id // ""')
-tpath=$(j '.transcript_path // ""')
+# task-35: superseded — modelid=$(j '.model.id // ""')
+# task-35: superseded — tpath=$(j '.transcript_path // ""')
+fields=$(printf '%s' "$input" | jq -r '
+  (.model.display_name // .model.id // "?"),
+  (.effort.level // ""),
+  (.context_window.total_input_tokens // 0),
+  (.context_window.context_window_size // 200000),
+  (.context_window.used_percentage // 0),
+  (.rate_limits.five_hour.used_percentage // ""),
+  (.workspace.current_dir // .cwd // ""),
+  (.model.id // ""),
+  (.transcript_path // ""),
+  (.session_id // "default")' 2>/dev/null)
+{ IFS= read -r model; IFS= read -r effort; IFS= read -r used
+  IFS= read -r total; IFS= read -r pct;    IFS= read -r lim5
+  IFS= read -r cwd;   IFS= read -r modelid; IFS= read -r tpath
+  IFS= read -r sid; } <<< "$fields"
+model=${model% (1M context)}
+pct=${pct%.*}
+lim5=${lim5%.*}
 
 R=$'\033[0m'; DIM=$'\033[38;2;120;120;120m'; BOLD=$'\033[1m'
 col() { # pct -> ANSI color; task-17: amber/red boundaries via CC_AMBER/CC_RED
@@ -42,13 +65,19 @@ while [ "$i" -lt "$filled" ]; do fstr="${fstr}█"; i=$((i+1)); done
 i=0; while [ "$i" -lt $((CELLS - filled)) ]; do estr="${estr}░"; i=$((i+1)); done
 bar="${C}${fstr}${DIM}${estr}${R}"
 
-# task-11: LC_ALL=C pins the decimal radix to a period on the %.1fm branch; under
-# a comma locale awk would emit '1,2m'. The token count is a dot-formatted integer
-# and the output is ASCII, so only the numeric radix is forced (LC_CTYPE untouched).
+# task-35: integer arithmetic replaces the two awk spawns per call. The task-11
+# radix concern is gone with awk: the tenth digit is computed and printed as an
+# integer, so no locale can reintroduce a comma. Rounding is decimal-correct;
+# awk's %.1f differed only where the binary double of an exact half rounds down.
+# task-35: superseded — if [ "$n" -ge 1000000 ]; then LC_ALL=C awk -v n="$n" 'BEGIN{v=n/1000000; if(v==int(v))printf"%dm",v;else printf"%.1fm",v}'
+# task-35: superseded — elif [ "$n" -ge 1000 ]; then awk -v n="$n" 'BEGIN{printf"%dk",int(n/1000+0.5)}'
 fmt() {
-  local n=$1
-  if   [ "$n" -ge 1000000 ]; then LC_ALL=C awk -v n="$n" 'BEGIN{v=n/1000000; if(v==int(v))printf"%dm",v;else printf"%.1fm",v}'
-  elif [ "$n" -ge 1000 ];    then awk -v n="$n" 'BEGIN{printf"%dk",int(n/1000+0.5)}'
+  local n=$1 t
+  if [ "$n" -ge 1000000 ]; then
+    if [ $(( n % 1000000 )) -eq 0 ]; then printf '%dm' $(( n / 1000000 ))
+    else t=$(( (n + 50000) / 100000 )); printf '%d.%dm' $(( t / 10 )) $(( t % 10 ))
+    fi
+  elif [ "$n" -ge 1000 ]; then printf '%dk' $(( (n + 500) / 1000 ))
   else printf '%d' "$n"
   fi
 }
@@ -96,13 +125,13 @@ self_update() { # detached background; silent; never surfaces failures
 # startup banner. When the active model equals the newest fallback target, flag it
 # with an amber arrow; a later manual switch away makes .model.id stop matching and
 # the marker drops.
-fbmark=""
-if [ -n "$tpath" ] && [ -f "$tpath" ] && [ -n "$modelid" ]; then
-  fbto=$(tail -n 4000 "$tpath" 2>/dev/null \
-        | jq -r 'select(.type=="assistant") | .message.content[]?
-                 | select(.type=="fallback") | .to.model' 2>/dev/null | tail -1)
-  [ "$fbto" = "$modelid" ] && fbmark=" $(col 50)⤵${R}"
-fi
+# task-35: the per-render tail+jq scan moved into the memoized transcript pass
+# below; the newest fallback target rides in the same cache file as the token
+# totals and the mark is recomputed from it on every render.
+# task-35: superseded — fbto=$(tail -n 4000 "$tpath" 2>/dev/null \
+# task-35: superseded —       | jq -r 'select(.type=="assistant") | .message.content[]?
+# task-35: superseded —                | select(.type=="fallback") | .to.model' 2>/dev/null | tail -1)
+# task-35: superseded — [ "$fbto" = "$modelid" ] && fbmark=" $(col 50)⤵${R}"
 
 # task-27 (decision-2): superseded — the activity dot is removed. Its signals
 # (cost.total_api_duration_ms and the transcript mtime) advance only at message and
@@ -132,34 +161,46 @@ fi
 #   fi
 # fi
 
-# --- session token throughput (task-32) -------------------------------------
+# --- transcript pass: token throughput (task-32) + fallback target ----------
 # Cumulative read/write across the transcript: read = Σ(input + cache_read +
-# cache_creation), write = Σ output. Shown by default after the context segment;
-# CC_TOKENS=0 opts out. Totals are memoized on the transcript's size+mtime in
-# CACHE_DIR/tokens-<sid>, so idle re-renders do no jq work; a full rescan runs only when
-# the transcript has grown (once per turn). jq streams with -n 'reduce(inputs)' (no
-# slurp). Compaction that prunes the transcript lowers the total. tok0/tok1 are the width
-# tiers (full / read-only); tok2 is empty (segment dropped). Hidden until a turn records
-# usage. The assembly below places the chosen tier between ctx and rest.
-tok0=""; tok1=""; tok2=""
-if [ "${CC_TOKENS:-1}" != "0" ] && [ -n "$tpath" ] && [ -f "$tpath" ]; then
-  sid=$(j '.session_id // "default"')
-  sz=$(stat -c %s "$tpath" 2>/dev/null || stat -f %z "$tpath" 2>/dev/null || printf 0)
-  mt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null || printf 0)
-  tf="$CACHE_DIR/tokens-$sid"; rd=0; wr=0; psz=""; pmt=""
-  [ -f "$tf" ] && IFS=' ' read -r psz pmt rd wr < "$tf" 2>/dev/null
+# cache_creation), write = Σ output. Shown by default; CC_TOKENS=0 opts out.
+# task-35: one memoized pass serves both features. The totals and the newest
+# fallback target are keyed on the transcript's size+mtime in
+# CACHE_DIR/tokens-<sid> (fields: sz mt rd wr fbto), so idle re-renders spawn no
+# jq and one stat; the full rescan runs only when the transcript changed (once
+# per turn). jq streams with -n 'reduce(inputs)' (no slurp). Compaction that
+# prunes the transcript lowers the total. Pre-task-35 cache files carry four
+# fields; fbto reads empty and heals on the next transcript change. tok0/tok1
+# are the width tiers (full / read-only); tok2 is empty (segment dropped).
+# Hidden until a turn records usage.
+tok0=""; tok1=""; tok2=""; fbmark=""
+if [ -n "$tpath" ] && [ -f "$tpath" ]; then
+  # task-35: superseded — sid=$(j '.session_id // "default"')  (single jq pass, top)
+  # task-35: superseded — sz=$(stat -c %s "$tpath" 2>/dev/null || stat -f %z "$tpath" 2>/dev/null || printf 0)
+  # task-35: superseded — mt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null || printf 0)
+  case "$OSTYPE" in                      # one stat; the GNU->BSD retry chain spawned four
+    darwin*|*bsd*) szmt=$(stat -f '%z %m' "$tpath" 2>/dev/null) ;;
+    *)             szmt=$(stat -c '%s %Y' "$tpath" 2>/dev/null) ;;
+  esac
+  [ -n "$szmt" ] || szmt="0 0"
+  sz=${szmt% *}; mt=${szmt#* }
+  tf="$CACHE_DIR/tokens-$sid"; rd=0; wr=0; psz=""; pmt=""; fbto=""
+  [ -f "$tf" ] && IFS=' ' read -r psz pmt rd wr fbto < "$tf" 2>/dev/null
   case "$rd" in ''|*[!0-9]*) rd=0 ;; esac; case "$wr" in ''|*[!0-9]*) wr=0 ;; esac
-  if [ "$psz" != "$sz" ] || [ "$pmt" != "$mt" ]; then         # rescan only when it grew
-    IFS=$'\t' read -r rd wr < <(jq -n -r '
-      reduce (inputs | select(.type=="assistant") | .message.usage? // empty) as $u
-        ({r:0,w:0};
-             .r += (($u.input_tokens//0)+($u.cache_read_input_tokens//0)+($u.cache_creation_input_tokens//0))
-           | .w += ($u.output_tokens//0))
-      | "\(.r)\t\(.w)"' "$tpath" 2>/dev/null)
+  if [ "$psz" != "$sz" ] || [ "$pmt" != "$mt" ]; then         # rescan only on change
+    IFS=$'\t' read -r rd wr fbto < <(jq -n -r '
+      reduce (inputs | select(.type=="assistant")) as $a
+        ({r:0, w:0, f:""};
+           ($a.message.usage? // {}) as $u
+         | .r += (($u.input_tokens//0)+($u.cache_read_input_tokens//0)+($u.cache_creation_input_tokens//0))
+         | .w += ($u.output_tokens//0)
+         | .f = (([$a.message.content[]? | select(.type=="fallback") | .to.model] | last) // .f))
+      | "\(.r)\t\(.w)\t\(.f)"' "$tpath" 2>/dev/null)
     case "$rd" in ''|*[!0-9]*) rd=0 ;; esac; case "$wr" in ''|*[!0-9]*) wr=0 ;; esac
-    mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s %s\n' "$sz" "$mt" "$rd" "$wr" > "$tf" 2>/dev/null
+    mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s %s %s\n' "$sz" "$mt" "$rd" "$wr" "$fbto" > "$tf" 2>/dev/null
   fi
-  if [ "$rd" -gt 0 ] || [ "$wr" -gt 0 ]; then
+  [ -n "$fbto" ] && [ "$fbto" = "$modelid" ] && fbmark=" $(col 50)⤵${R}"
+  if [ "${CC_TOKENS:-1}" != "0" ] && { [ "$rd" -gt 0 ] || [ "$wr" -gt 0 ]; }; then
     tok0="${sep}${DIM}r:${R}$(pad 4 "$(fmt "$rd")") ${DIM}w:${R}$(pad 4 "$(fmt "$wr")")"
     tok1="${sep}${DIM}r:${R}$(pad 4 "$(fmt "$rd")")"
   fi
@@ -188,13 +229,34 @@ if [ -n "$lim5" ]; then
   rest="${rest}${sep}${DIM}5h ${R}${LC}$(pad 4 "${lim5}%")${R}"
 fi
 
-# git branch — symbolic-ref shows the real branch even on an unborn/empty branch
-# (rev-parse would print literal "HEAD"); fall back to short commit when detached.
+# git branch — task-35: parsed from the repository's HEAD file; spawning git put
+# its name into terminal title bars on every render. Walk up from cwd to .git,
+# follow a "gitdir:" pointer file (worktree, submodule), then read HEAD: a
+# "ref: refs/heads/..." line is the branch — present even on an unborn branch,
+# which symbolic-ref also showed — and a bare hash is a detached HEAD, shown as
+# its first seven digits.
+# task-35: superseded — br=$(git -C "$cwd" symbolic-ref --quiet --short HEAD 2>/dev/null)
+# task-35: superseded — sha=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
+# task-35: superseded — [ -n "$sha" ] && br="(${sha})"
 if [ -n "$cwd" ]; then
-  br=$(git -C "$cwd" symbolic-ref --quiet --short HEAD 2>/dev/null)
-  if [ -z "$br" ]; then
-    sha=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
-    [ -n "$sha" ] && br="(${sha})"
+  br=""; gd=""; d=$cwd
+  while :; do
+    [ -e "$d/.git" ] && { gd="$d/.git"; break; }
+    [ "$d" = "/" ] && break
+    case "$d" in */*) d=${d%/*}; [ -n "$d" ] || d="/" ;; *) break ;; esac
+  done
+  if [ -n "$gd" ] && [ -f "$gd" ]; then                 # worktree/submodule pointer
+    gl=""; IFS= read -r gl < "$gd" 2>/dev/null
+    gl=${gl#gitdir: }
+    case "$gl" in /*) gd=$gl ;; *) gd="$d/$gl" ;; esac
+  fi
+  if [ -n "$gd" ] && [ -f "$gd/HEAD" ]; then
+    hd=""; IFS= read -r hd < "$gd/HEAD" 2>/dev/null
+    case "$hd" in
+      "ref: refs/heads/"*) br=${hd#ref: refs/heads/} ;;
+      "ref: "*)            br=${hd#ref: } ;;           # symbolic ref outside heads
+      ?*)                  br="(${hd:0:7})" ;;         # detached
+    esac
   fi
   if [ -n "$br" ]; then
     BRMAX=${CC_BRANCH_MAX:-18}
@@ -244,8 +306,11 @@ fi
 # marker on the next render and record it in announced-version so it shows only once.
 # Reads state from the previous run; no network, outside the fixed-width segments.
 if [ -f "$CACHE_DIR/applied-version" ]; then
-  av=$(cat "$CACHE_DIR/applied-version" 2>/dev/null)
-  ann=$(cat "$CACHE_DIR/announced-version" 2>/dev/null)
+  # task-35: superseded — av=$(cat "$CACHE_DIR/applied-version" 2>/dev/null)
+  # task-35: superseded — ann=$(cat "$CACHE_DIR/announced-version" 2>/dev/null)
+  av=""; ann=""
+  IFS= read -r av < "$CACHE_DIR/applied-version" 2>/dev/null
+  [ -f "$CACHE_DIR/announced-version" ] && IFS= read -r ann < "$CACHE_DIR/announced-version" 2>/dev/null
   if [ -n "$av" ] && [ "$av" != "$ann" ]; then
     rest="${rest}${sep}$(col 0)⇧ v${av}${R}"
     printf '%s' "$av" > "$CACHE_DIR/announced-version" 2>/dev/null
@@ -282,10 +347,20 @@ printf '%s' "$out"
 # stat and a touch). The stamp is written now so a failed or slow check still waits
 # a day before retrying. Guarded by CC_AUTO_UPDATE (opt-in, decision-3) and curl's
 # presence.
+# task-35: RANDOM samples the age gate at ~1/20 of renders so its date+stat pair
+# does not spawn on every render; the daily stamp still bounds real checks to one
+# per day, and the sampling only delays the day rollover by a few renders.
 # task-33: superseded — if [ "${CC_AUTO_UPDATE:-1}" != "0" ] && command -v curl >/dev/null 2>&1; then
-if [ "${CC_AUTO_UPDATE:-0}" = "1" ] && command -v curl >/dev/null 2>&1; then
+# task-35: superseded — if [ "${CC_AUTO_UPDATE:-0}" = "1" ] && command -v curl >/dev/null 2>&1; then
+if [ "${CC_AUTO_UPDATE:-0}" = "1" ] && [ $(( RANDOM % 20 )) -eq 0 ] && command -v curl >/dev/null 2>&1; then
   stamp="$CACHE_DIR/last-check"; now=$(date +%s); last=0
-  [ -f "$stamp" ] && last=$(stat -c %Y "$stamp" 2>/dev/null || stat -f %m "$stamp" 2>/dev/null || printf 0)
+  # task-35: superseded — last=$(stat -c %Y "$stamp" 2>/dev/null || stat -f %m "$stamp" 2>/dev/null || printf 0)
+  if [ -f "$stamp" ]; then
+    case "$OSTYPE" in
+      darwin*|*bsd*) last=$(stat -f %m "$stamp" 2>/dev/null) ;;
+      *)             last=$(stat -c %Y "$stamp" 2>/dev/null) ;;
+    esac
+  fi
   case "$last" in ''|*[!0-9]*) last=0 ;; esac
   if [ "$(( now - last ))" -ge 86400 ]; then
     mkdir -p "$CACHE_DIR" 2>/dev/null && : > "$stamp" 2>/dev/null
