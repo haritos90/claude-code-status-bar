@@ -31,11 +31,12 @@ fields=$(printf '%s' "$input" | jq -r '
   (.workspace.current_dir // .cwd // ""),
   (.model.id // ""),
   (.transcript_path // ""),
-  (.session_id // "default")' 2>/dev/null)
+  (.session_id // "default"),
+  (.rate_limits.five_hour.resets_at // "")' 2>/dev/null)
 { IFS= read -r model; IFS= read -r effort; IFS= read -r used
   IFS= read -r total; IFS= read -r pct;    IFS= read -r lim5
   IFS= read -r cwd;   IFS= read -r modelid; IFS= read -r tpath
-  IFS= read -r sid; } <<< "$fields"
+  IFS= read -r sid;   IFS= read -r reset5; } <<< "$fields"
 model=${model% (1M context)}
 pct=${pct%.*}
 lim5=${lim5%.*}
@@ -90,6 +91,12 @@ fmt() {
 # trigger at the end of the script decides whether to spawn self_update.
 CC_REPO="haritos90/claude-code-status-bar"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/claude-code-status-bar"
+
+# task-38: current epoch seconds, spawn-free where printf %(fmt)T exists (bash
+# 4.2+); /bin/bash 3.2 falls back to one date spawn. Used by the 5h reset tail
+# and the self-update trigger.
+now=$(printf '%(%s)T' -1 2>/dev/null)
+case "$now" in ''|*[!0-9]*) now=$(date +%s) ;; esac
 
 vgt() { # exit 0 iff $1 is strictly newer than $2 (dotted numeric versions)
   awk -v a="$1" -v b="$2" 'BEGIN{
@@ -223,10 +230,29 @@ ctx2="${sep}${C}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
 
 # rest — everything after the context segment; independent of the chosen tier.
 rest=""
-# 5-hour rate-limit usage
+# 5-hour rate-limit usage — task-38: bare colored percent, the dim "5h" label is
+# dropped. A reset tail (⟳2.4h / ⟳45m, in the percent's color) appears only when
+# the figure is actionable: usage at or above CC_RED, or the reset within
+# CC_RESET_SOON minutes (default 15). resets_at is epoch seconds; a missing or
+# non-numeric value, or a reset not in the future, yields no tail. Remaining time
+# formats as tenth-hours at or above 90 minutes, whole minutes below.
+# task-38: superseded — rest="${rest}${sep}${DIM}5h ${R}${LC}$(pad 4 "${lim5}%")${R}"
 if [ -n "$lim5" ]; then
   LC=$(col "$lim5")
-  rest="${rest}${sep}${DIM}5h ${R}${LC}$(pad 4 "${lim5}%")${R}"
+  seg5="${LC}$(pad 4 "${lim5}%")${R}"
+  case "$reset5" in *[!0-9]*) reset5="" ;; esac
+  if [ -n "$reset5" ] && [ "$reset5" -gt "$now" ]; then
+    rem=$(( reset5 - now ))
+    if [ "$lim5" -ge "${CC_RED:-80}" ] || [ "$rem" -le $(( ${CC_RESET_SOON:-15} * 60 )) ]; then
+      if [ "$rem" -ge 5400 ]; then
+        t=$(( (rem + 180) / 360 ))
+        seg5="${seg5} ${LC}⟳$(( t / 10 )).$(( t % 10 ))h${R}"
+      else
+        seg5="${seg5} ${LC}⟳$(( (rem + 30) / 60 ))m${R}"
+      fi
+    fi
+  fi
+  rest="${rest}${sep}${seg5}"
 fi
 
 # git branch — task-35: parsed from the repository's HEAD file; spawning git put
@@ -361,7 +387,8 @@ printf '%s' "$out"
 # task-33: superseded — if [ "${CC_AUTO_UPDATE:-1}" != "0" ] && command -v curl >/dev/null 2>&1; then
 # task-35: superseded — if [ "${CC_AUTO_UPDATE:-0}" = "1" ] && command -v curl >/dev/null 2>&1; then
 if [ "${CC_AUTO_UPDATE:-0}" = "1" ] && [ $(( RANDOM % 20 )) -eq 0 ] && command -v curl >/dev/null 2>&1; then
-  stamp="$CACHE_DIR/last-check"; now=$(date +%s); last=0
+  # task-38: superseded — stamp="$CACHE_DIR/last-check"; now=$(date +%s); last=0
+  stamp="$CACHE_DIR/last-check"; last=0    # now comes from the top-of-script clock
   # task-35: superseded — last=$(stat -c %Y "$stamp" 2>/dev/null || stat -f %m "$stamp" 2>/dev/null || printf 0)
   if [ -f "$stamp" ]; then
     case "$OSTYPE" in
