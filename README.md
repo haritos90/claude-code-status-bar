@@ -32,18 +32,20 @@ Add this to ~/.claude/settings.json (existing keys are preserved):
 
 ## Updates
 
-The status line updates itself from GitHub releases. At most once per day it checks
-the latest release in a detached background process — the render never waits on the
-network — and when a newer version is published it downloads and atomically replaces
-the installed script, validating it before the swap. The first render afterwards
-shows a `⇧ vX.Y` marker once.
+The status line can update itself from GitHub releases. Auto-update is disabled by
+default; enable it with `CC_AUTO_UPDATE=1` in the `statusLine.command`:
 
-Disable it with `CC_AUTO_UPDATE=0` in the `statusLine.command`:
+    "statusLine": { "type": "command", "command": "CC_AUTO_UPDATE=1 bash ~/.claude/statusline.sh" }
 
-    "statusLine": { "type": "command", "command": "CC_AUTO_UPDATE=0 bash ~/.claude/statusline.sh" }
+When enabled, at most once per day it checks the latest release in a detached
+background process — the render never waits on the network — and when a newer version
+is published it downloads and atomically replaces the installed script, validating it
+before the swap. The first render afterwards shows a `⇧ vX.Y` marker once.
 
 Releases are `v*` tags; the check reads the GitHub releases/latest API and compares
-it against the script's embedded `VERSION`. Updates require `curl`.
+it against the script's embedded `VERSION`. Updates require `curl`. Without
+`CC_AUTO_UPDATE=1` the installed version stays pinned until it is re-downloaded
+manually.
 
 ## Content
 
@@ -90,5 +92,5 @@ Set these as environment variables in the `statusLine.command`, for example
 | `CC_TOKENS` | `1` | Show the cumulative session read/write token segment; set `0` to hide it |
 | `CC_AMBER` / `CC_RED` | `50` / `80` | Amber and red context-fill percentage boundaries |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
-| `CC_AUTO_UPDATE` | `1` | Self-update from GitHub releases; set `0` to disable |
+| `CC_AUTO_UPDATE` | `0` | Self-update from GitHub releases; set `1` to enable |
 
