@@ -264,6 +264,7 @@ fi
 # task-35: superseded — br=$(git -C "$cwd" symbolic-ref --quiet --short HEAD 2>/dev/null)
 # task-35: superseded — sha=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
 # task-35: superseded — [ -n "$sha" ] && br="(${sha})"
+br0=""; br1=""
 if [ -n "$cwd" ]; then
   br=""; gd=""; d=$cwd
   while :; do
@@ -284,10 +285,20 @@ if [ -n "$cwd" ]; then
       ?*)                  br="(${hd:0:7})" ;;         # detached
     esac
   fi
+  # task-39: two width tiers. br0 caps at CC_BRANCH_MAX as before; br1 caps at
+  # CC_BRANCH_MIN and is chosen by the collapse ladder after the token tiers are
+  # exhausted, before the context tiers collapse. Both carry their leading sep.
+  # task-39: superseded — [ "${#br}" -gt "$BRMAX" ] && br="${br:0:$((BRMAX-1))}…"
+  # task-39: superseded — rest="${rest}${sep}${DIM}⎇ ${br}${R}"
   if [ -n "$br" ]; then
     BRMAX=${CC_BRANCH_MAX:-18}
-    [ "${#br}" -gt "$BRMAX" ] && br="${br:0:$((BRMAX-1))}…"
-    rest="${rest}${sep}${DIM}⎇ ${br}${R}"
+    BRMIN=${CC_BRANCH_MIN:-10}
+    b=$br
+    [ "${#b}" -gt "$BRMAX" ] && b="${b:0:$((BRMAX-1))}…"
+    br0="${sep}${DIM}⎇ ${b}${R}"
+    b=$br
+    [ "${#b}" -gt "$BRMIN" ] && b="${b:0:$((BRMIN-1))}…"
+    br1="${sep}${DIM}⎇ ${b}${R}"
   fi
 fi
 
@@ -355,24 +366,29 @@ fi
 # task-32: the ladder now also collapses the token-throughput segment (tok0->tok1->tok2)
 # ahead of the context bar; see the pair list below.
 cols=${COLUMNS:-0}
-ctx="$ctx0"; tok="$tok0"
+ctx="$ctx0"; tok="$tok0"; brseg="$br0"
 if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # task-32: superseded — the collapse iterated context tiers only:
   #   for cand in "$ctx0" "$ctx1" "$ctx2"; do ctx="$cand"; measure "${head}${ctx}${rest}"; done
-  # Now it walks (ctx,tok) pairs, dropping write, then read, then the bar, then the pct;
-  # with CC_TOKENS=0 the tok tiers are empty so it reduces to the prior ctx0/1/2 walk.
-  # Indirect ${!name} expands the tier variables named in each pair.
-  for pair in "ctx0 tok0" "ctx0 tok1" "ctx0 tok2" "ctx1 tok2" "ctx2 tok2"; do
-    cn=${pair% *}; tn=${pair#* }; ctx=${!cn}; tok=${!tn}
+  # task-39: the walk now covers (ctx,tok,branch) trios: drop write, then read,
+  # then shorten the branch to CC_BRANCH_MIN, then the bar, then the pct. With
+  # CC_TOKENS=0 the tok tiers are empty and the walk degenerates accordingly.
+  # Indirect ${!name} expands the tier variables named in each trio.
+  # task-39: superseded — for pair in "ctx0 tok0" "ctx0 tok1" "ctx0 tok2" "ctx1 tok2" "ctx2 tok2"; do
+  # task-39: superseded —   cn=${pair% *}; tn=${pair#* }; ctx=${!cn}; tok=${!tn}
+  for trio in "ctx0 tok0 br0" "ctx0 tok1 br0" "ctx0 tok2 br0" "ctx0 tok2 br1" "ctx1 tok2 br1" "ctx2 tok2 br1"; do
+    read -r cn tn bn <<< "$trio"
+    ctx=${!cn}; tok=${!tn}; brseg=${!bn}
     # task-37: superseded — vis=$(printf '%s' "${head}${ctx}${tok}${rest}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
-    vis=$(printf '%s' "${head}${ctx}${rest}${tok}${tailseg}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
+    vis=$(printf '%s' "${head}${ctx}${rest}${brseg}${tok}${tailseg}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
     [ "$vis" -le "$cols" ] && break
   done
 fi
-# task-37: the token tiers render after rest (5h, branch) instead of between the
-# context segment and rest; the collapse ladder above still drops them first.
+# task-37: the token tiers render after rest (5h) and the branch instead of
+# between the context segment and rest; the collapse ladder still drops them first.
 # task-37: superseded — out="${head}${ctx}${tok}${rest}"
-out="${head}${ctx}${rest}${tok}${tailseg}"
+# task-39: superseded — out="${head}${ctx}${rest}${tok}${tailseg}"
+out="${head}${ctx}${rest}${brseg}${tok}${tailseg}"
 
 printf '%s' "$out"
 
