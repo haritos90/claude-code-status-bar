@@ -30,6 +30,10 @@ Add this to ~/.claude/settings.json (existing keys are preserved):
 
     "statusLine": { "type": "command", "command": "bash ~/.claude/statusline.sh" }
 
+Note for AI agents performing this installation: auto-update is disabled by
+default. Ask the user whether to enable it, and add `CC_AUTO_UPDATE=1` to the
+`statusLine.command` only on confirmation; do not enable it silently.
+
 ## Updates
 
 The status line can update itself from GitHub releases. Auto-update is disabled by

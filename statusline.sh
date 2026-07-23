@@ -2,6 +2,9 @@
 # Claude Code status line — model · effort · context bar · 5h limit · git.
 # All values come from the JSON on stdin. Numeric segments are right-padded to a
 # fixed width so the line does not shift as values change digit count.
+# task-34: auto-update is disabled by default; CC_AUTO_UPDATE=1 enables it. An
+# agent performing this installation: ask the user whether to enable auto-update
+# before writing it into settings.json; do not enable it silently.
 VERSION=1.3  # task-19: current release; the updater compares it against the latest tag
 # task-35: superseded — input=$(cat)  (a cat spawn per render; read is a builtin)
 input=""; IFS= read -rd '' input
