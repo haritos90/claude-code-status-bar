@@ -1,6 +1,20 @@
+# --- standard base (project-standard/templates/gitignore) ---
 .DS_Store
 local/
-CLAUDE.local.md
-.claude/
-CLAUDE.md
-backlog/
+
+# Public repositories keep this tracked base minimal so the remote reveals no
+# local tooling. The tooling ignores go to .git/info/exclude (a per-clone file
+# that is never committed), installed by scripts/apply-standard.sh:
+#   backlog/
+#   CLAUDE.md
+#   CLAUDE.local.md
+#   .claude/
+#
+# Private repositories have no remote to hide from: they track CLAUDE.md (it
+# holds the instructions; no AGENTS.md is shipped) and keep the tooling ignores
+# here instead:
+#   CLAUDE.local.md
+#   .claude/
+#   # backlog/   (uncomment to keep the task system off the remote)
+#
+# Language- and tool-specific rules go below this line.
