@@ -1,9 +1,7 @@
-# Publish a GitHub Release for each pushed version tag (v*). The release notes are
-# the annotated tag's own message (write it with `git tag -a vX.Y -m "notes"`)
-# followed by an auto-generated changelog: commit subjects since the previous v*
-# tag, or the whole history on the first release. No assets are attached — the
-# status line updates itself by fetching statusline.sh from raw at the tag. Also
-# runnable against an existing tag via workflow_dispatch.
+# Publish a GitHub Release for each pushed v* tag; workflow_dispatch runs it for
+# an existing tag. Notes: the annotated tag message, then commit subjects since
+# the previous v* tag. No assets — installs fetch statusline.sh from raw at the
+# tag.
 name: Release
 
 on:
