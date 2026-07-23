@@ -305,6 +305,9 @@ fi
 # new version to CACHE_DIR/applied-version after an atomic replace; show a ⇧ vX.Y
 # marker on the next render and record it in announced-version so it shows only once.
 # Reads state from the previous run; no network, outside the fixed-width segments.
+# task-37: the marker gets its own tail variable so the token segment can render
+# after the branch; the marker stays the last element of the line.
+tailseg=""
 if [ -f "$CACHE_DIR/applied-version" ]; then
   # task-35: superseded — av=$(cat "$CACHE_DIR/applied-version" 2>/dev/null)
   # task-35: superseded — ann=$(cat "$CACHE_DIR/announced-version" 2>/dev/null)
@@ -312,7 +315,8 @@ if [ -f "$CACHE_DIR/applied-version" ]; then
   IFS= read -r av < "$CACHE_DIR/applied-version" 2>/dev/null
   [ -f "$CACHE_DIR/announced-version" ] && IFS= read -r ann < "$CACHE_DIR/announced-version" 2>/dev/null
   if [ -n "$av" ] && [ "$av" != "$ann" ]; then
-    rest="${rest}${sep}$(col 0)⇧ v${av}${R}"
+    # task-37: superseded — rest="${rest}${sep}$(col 0)⇧ v${av}${R}"
+    tailseg="${sep}$(col 0)⇧ v${av}${R}"
     printf '%s' "$av" > "$CACHE_DIR/announced-version" 2>/dev/null
   fi
 fi
@@ -334,11 +338,15 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # Indirect ${!name} expands the tier variables named in each pair.
   for pair in "ctx0 tok0" "ctx0 tok1" "ctx0 tok2" "ctx1 tok2" "ctx2 tok2"; do
     cn=${pair% *}; tn=${pair#* }; ctx=${!cn}; tok=${!tn}
-    vis=$(printf '%s' "${head}${ctx}${tok}${rest}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
+    # task-37: superseded — vis=$(printf '%s' "${head}${ctx}${tok}${rest}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
+    vis=$(printf '%s' "${head}${ctx}${rest}${tok}${tailseg}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
     [ "$vis" -le "$cols" ] && break
   done
 fi
-out="${head}${ctx}${tok}${rest}"
+# task-37: the token tiers render after rest (5h, branch) instead of between the
+# context segment and rest; the collapse ladder above still drops them first.
+# task-37: superseded — out="${head}${ctx}${tok}${rest}"
+out="${head}${ctx}${rest}${tok}${tailseg}"
 
 printf '%s' "$out"
 
