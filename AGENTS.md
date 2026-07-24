@@ -1,66 +1,74 @@
-# Agent Instructions
+# AGENTS.md
 
-## Tasks drive all work
+Context for AI coding agents working on this repository: what the project is,
+how it is built, how to verify a change, and the invariants a change must not
+break. Short by design. The human contribution process — pull requests,
+conventions, AI-usage policy — is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- Every change maps to exactly one task in the Backlog.md system
-  (backlog/). No task, no edits.
-- Asked to change something without a task: create one first
-  (`backlog task create "Title" -d "..." --ac "..."`), then work it.
-- Implement exactly what the task states. Discovered work and new ideas
-  become new tasks, not scope expansion.
-- If a task is ambiguous or conflicts with the code, stop and report; do
-  not guess.
+This project is a single terminal status line for the Claude Code CLI. Claude
+Code pipes a session JSON object to a command on stdin on every update; the
+command prints one line — model, reasoning effort, context-window fill,
+5-hour rate-limit usage, git branch, and cumulative session token throughput.
+The whole program is `statusline.sh`; there is no build step and no runtime
+dependency on the project itself.
 
-## Task workflow
+---
 
-1. Read: `backlog task <id> --plain`
-2. Claim: `backlog task edit <id> -s "In Progress" -a @<your-name>`
-3. Implement.
-4. Verify each acceptance criterion: `backlog task edit <id> --check-ac <n>`
-5. Summarize changes: `backlog task edit <id> --notes "..."`
-6. Close: `backlog task edit <id> -s Done`
+## 1. Layout
 
-Select work with `backlog task list -s "To Do" --plain`. Skip tasks whose
-dependencies are not Done; never select Deferred tasks. Blocked mid-task:
-record the blocker in a comment, return the task to To Do, report; only
-the owner sets Deferred. Never edit files under backlog/ by hand; use the
-CLI. Done tasks are eventually retired: the file moves unchanged from
-backlog/tasks/ to backlog/completed/ and stops appearing in CLI queries.
-Detailed guidance: `backlog instructions overview`.
+| Path | Contents |
+|---|---|
+| `statusline.sh` | The entire program: parse the stdin JSON, assemble the segments, collapse to terminal width, render. Also the optional self-update. |
+| `README.md` | User-facing: install, the segment reference, the configuration table. |
+| `.github/workflows/release.yml` | Cuts a release; guards the tag against the script's embedded `VERSION`. |
 
-## Decisions
+A change is almost always to `statusline.sh` and its `README.md` documentation
+in the same batch. The segment table and the configuration table in the README
+are the spec: a segment or `CC_*` option that changes updates both the code and
+those tables together.
 
-- Architectural and design decisions are recorded with
-  `backlog decision create`, one per decision. Do not encode them in this
-  file, CLAUDE.md, README, or documents; those link to the decision by id.
-- A decision is never rewritten to reverse it: supersede it with a new
-  record that references the old one. See docs/decision-records.md.
+---
 
-## Editing code
+## 2. Build, run, test
 
-- When replacing working logic, keep the old code commented out, marked
-  with the task id (`// task-42: superseded`). Use judgment: dead code,
-  typos, renames, and generated files are edited normally. Commented-out
-  blocks are removed only by a dedicated cleanup task.
-- Match the style, naming, and structure of the surrounding code.
-- No new dependencies and no new top-level files or directories unless the
-  task states them.
-- Commits: Conventional Commits `type(scope): <imperative summary>
-  (task-<id>)`; types feat, fix, refactor, docs, test, chore, perf.
-  Usually one commit per task, but use judgement. Do not push.
+There is no build. Exercise the script with a session JSON on stdin:
 
-## Language
+```bash
+echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | bash statusline.sh
+```
 
-- Everything in English: code, comments, commits, tasks, documentation.
-- Documentation reads as a technical specification: concise, factual, no
-  emoji, no marketing, no first person, no attribution of decisions to
-  people.
-- Neutral wording only: describe technical behavior; never reference
-  countries, jurisdictions, politics, or the motivations of users.
+Verify a rendering change by eye against the README's worked examples, and
+verify the collapse ladder by constraining the width on the same input with
+`COLUMNS=50 bash statusline.sh`. Run `shellcheck statusline.sh` when it is
+available. Requirements are `bash`, `jq`, and `awk`; `curl` is used only by
+installation and self-update.
 
-## Boundaries
+---
 
-- local/ is untracked scratch space; secrets live only there. Never commit
-  it or reference it from tracked files.
-- Do not modify the agent instruction file (AGENTS.md or CLAUDE.md),
-  .gitignore, or backlog/config.yml unless the task requires it.
+## 3. Golden rules
+
+1. Keep changes small and idiomatic: match the surrounding shell style, comment
+   the why and not the what, and add no dependency beyond `bash`/`jq`/`awk`.
+2. English only — code, comments, documentation, and commit messages.
+3. The render never blocks. It reads stdin, prints one line, and exits; it does
+   not wait on the network. The self-update check runs at most once a day in a
+   detached background process and never delays the render.
+4. Width is a contract. Numeric segments are right-padded to a fixed width so
+   the line does not shift as digit counts change, and the collapse ladder
+   drops segments in the documented priority order. A change to any segment
+   preserves both, and updates the README when the order or widths change.
+5. `VERSION` is embedded in the script and checked against the release tag in
+   CI. Bump it in the change that cuts a release; a tag that disagrees with
+   `VERSION` fails the release workflow.
+6. Commits: Conventional Commits `type(scope): imperative summary`.
+
+---
+
+## 4. Reference
+
+| Reference | Read it when |
+|---|---|
+| [README.md](README.md) | The segment meanings, the collapse order, and every `CC_*` option. |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | The contribution guide: pull requests, conventions, AI-usage policy. |
+
+This file is the agent context for the repository; there is no other.
