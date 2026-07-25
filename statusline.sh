@@ -400,6 +400,13 @@ fi
 cols=${COLUMNS:-0}
 ctx="$ctx0"; tok="$tok0"; brseg="$br0"
 if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
+  # task-46: the renderer draws the status line inside a padded box (paddingLeft 2,
+  # paddingRight 1-2 as of Claude Code 2.1.220) while COLUMNS carries the full
+  # terminal width, so a line within a few columns of COLUMNS was ellipsized by
+  # the renderer rather than collapsed here. The ladder fits the line into COLUMNS
+  # minus a reserve: CC_RESERVE overrides the default 4 (2 left + 2 right);
+  # 0 restores the pre-reserve comparison.
+  budget=$(( cols - ${CC_RESERVE:-4} ))
   # task-32: superseded — the collapse iterated context tiers only:
   #   for cand in "$ctx0" "$ctx1" "$ctx2"; do ctx="$cand"; measure "${head}${ctx}${rest}"; done
   # task-39: the walk now covers (ctx,tok,branch) trios: drop write, then read,
@@ -413,7 +420,8 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
     ctx=${!cn}; tok=${!tn}; brseg=${!bn}
     # task-37: superseded — vis=$(printf '%s' "${head}${ctx}${tok}${rest}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
     vis=$(printf '%s' "${head}${ctx}${rest}${brseg}${tok}${tailseg}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
-    [ "$vis" -le "$cols" ] && break
+    # task-46: superseded — [ "$vis" -le "$cols" ] && break
+    [ "$vis" -le "$budget" ] && break
   done
 fi
 # task-37: the token tiers render after rest (5h) and the branch instead of

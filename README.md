@@ -73,8 +73,11 @@ the session `w:` (write) figure is dropped, then `r:` (read); then the branch is
 shortened to `CC_BRANCH_MIN`; then the context bar is dropped and its fill color
 moves onto the token count; finally the percentage is dropped too. The widest form
 that fits is shown. This reads the terminal width from the `COLUMNS` variable Claude
-Code exports (2.1.153+); when it is absent, or with `CC_COMPACT=0`, the full line is
-always shown.
+Code exports (2.1.153+) and fits the line into `COLUMNS` minus a `CC_RESERVE`
+reserve (default 4): Claude Code draws the status line inside a padded box narrower
+than the terminal, so a line reaching the box edge would be cut with an ellipsis
+instead of collapsing. When `COLUMNS` is absent, or with `CC_COMPACT=0`, the full
+line is always shown.
 
 Exercise it without a live session (from a checkout of this repository):
 
@@ -98,6 +101,7 @@ Set these as environment variables in the `statusLine.command`, for example
 |---|---|---|
 | `CC_CELLS` | `7` | Context bar width in cells |
 | `CC_COMPACT` | `1` | Collapse the line to fit the terminal width; set `0` to always keep the full line |
+| `CC_RESERVE` | `4` | Columns subtracted from `COLUMNS` when fitting — the padding Claude Code draws around the status line; `0` fits to the full width |
 | `CC_TOKENS` | `1` | Show the cumulative session read/write token segment; set `0` to hide it |
 | `CC_AMBER` / `CC_RED` | `50` / `80` | Amber and red percentage boundaries (context fill and 5h usage) |
 | `CC_RESET_SOON` | `15` | Minutes to the 5h reset under which the reset tail always shows |
