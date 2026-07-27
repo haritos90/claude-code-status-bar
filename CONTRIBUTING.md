@@ -36,9 +36,9 @@ copyright assignment and no contributor license agreement are required.
 
 ## Developer Certificate of Origin
 
-Every commit carries a Signed-off-by line certifying the Developer Certificate
-of Origin (https://developercertificate.org): the right to submit the work
-under the project license. Sign off automatically with
+Every commit in a pull request carries a Signed-off-by line certifying the
+Developer Certificate of Origin (https://developercertificate.org): the right to
+submit the work under the project license. Sign off automatically with
 
     git commit -s
 
