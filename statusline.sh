@@ -413,16 +413,37 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # then shorten the branch to CC_BRANCH_MIN, then the bar, then the pct. With
   # CC_TOKENS=0 the tok tiers are empty and the walk degenerates accordingly.
   # Indirect ${!name} expands the tier variables named in each trio.
+  # task-48: measuring inside the walk spawned one awk per candidate — up to six per
+  # render on a narrow terminal, on top of the jq and stat spawns. Terminal title bars
+  # that display the tty's frontmost process flashed the name once per candidate. Every
+  # candidate is now assembled first and measured in a single awk pass that prints one
+  # visible width per line; the walk over those widths is shell-only. Tier order and the
+  # fit test are unchanged, so the tier chosen for a given COLUMNS is the same as before,
+  # including the fall-through to the narrowest tier when none of them fits.
   # task-39: superseded — for pair in "ctx0 tok0" "ctx0 tok1" "ctx0 tok2" "ctx1 tok2" "ctx2 tok2"; do
   # task-39: superseded —   cn=${pair% *}; tn=${pair#* }; ctx=${!cn}; tok=${!tn}
-  for trio in "ctx0 tok0 br0" "ctx0 tok1 br0" "ctx0 tok2 br0" "ctx0 tok2 br1" "ctx1 tok2 br1" "ctx2 tok2 br1"; do
+  # task-48: superseded — for trio in "ctx0 tok0 br0" "ctx0 tok1 br0" "ctx0 tok2 br0" "ctx0 tok2 br1" "ctx1 tok2 br1" "ctx2 tok2 br1"; do
+  # task-48: superseded —   read -r cn tn bn <<< "$trio"
+  # task-48: superseded —   ctx=${!cn}; tok=${!tn}; brseg=${!bn}
+  # task-37: superseded — vis=$(printf '%s' "${head}${ctx}${tok}${rest}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
+  # task-48: superseded —   vis=$(printf '%s' "${head}${ctx}${rest}${brseg}${tok}${tailseg}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
+  # task-46: superseded — [ "$vis" -le "$cols" ] && break
+  # task-48: superseded —   [ "$vis" -le "$budget" ] && break
+  # task-48: superseded — done
+  tiers=("ctx0 tok0 br0" "ctx0 tok1 br0" "ctx0 tok2 br0" "ctx0 tok2 br1" "ctx1 tok2 br1" "ctx2 tok2 br1")
+  cands=()
+  for trio in "${tiers[@]}"; do
     read -r cn tn bn <<< "$trio"
-    ctx=${!cn}; tok=${!tn}; brseg=${!bn}
-    # task-37: superseded — vis=$(printf '%s' "${head}${ctx}${tok}${rest}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
-    vis=$(printf '%s' "${head}${ctx}${rest}${brseg}${tok}${tailseg}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
-    # task-46: superseded — [ "$vis" -le "$cols" ] && break
-    [ "$vis" -le "$budget" ] && break
+    cands+=("${head}${!cn}${rest}${!bn}${!tn}${tailseg}")
   done
+  sel=$(( ${#tiers[@]} - 1 ))               # none fits -> the narrowest tier, as before
+  i=0
+  while IFS= read -r vis; do
+    [ "$vis" -le "$budget" ] && { sel=$i; break; }
+    i=$((i+1))
+  done < <(printf '%s\n' "${cands[@]}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
+  read -r cn tn bn <<< "${tiers[$sel]}"
+  ctx=${!cn}; tok=${!tn}; brseg=${!bn}
 fi
 # task-37: the token tiers render after rest (5h) and the branch instead of
 # between the context segment and rest; the collapse ladder still drops them first.
