@@ -454,9 +454,11 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # render on a narrow terminal, on top of the jq and stat spawns. Terminal title bars
   # that display the tty's frontmost process flashed the name once per candidate. Every
   # candidate is now assembled first and measured in a single awk pass that prints one
-  # visible width per line; the walk over those widths is shell-only. Tier order and the
-  # fit test are unchanged, so the tier chosen for a given COLUMNS is the same as before,
-  # including the fall-through to the narrowest tier when none of them fits.
+  # visible width per line; the walk over those widths is shell-only. task-48 changed the
+  # measurement only: it left the tier list and the fit test it inherited as they stood,
+  # down to the fall-through to the narrowest tier when none of them fits. task-49 and
+  # task-50 reordered and extended the tiers afterwards; the list below is the order in
+  # force, and no comment here claims it matches an earlier revision.
   # task-39: superseded — for pair in "ctx0 tok0" "ctx0 tok1" "ctx0 tok2" "ctx1 tok2" "ctx2 tok2"; do
   # task-39: superseded —   cn=${pair% *}; tn=${pair#* }; ctx=${!cn}; tok=${!tn}
   # task-48: superseded — for trio in "ctx0 tok0 br0" "ctx0 tok1 br0" "ctx0 tok2 br0" "ctx0 tok2 br1" "ctx1 tok2 br1" "ctx2 tok2 br1"; do
