@@ -62,7 +62,7 @@ manually.
 | `30%` | Rolling 5-hour rate-limit usage, in the usual green/amber/red. A reset tail (`⟳2.4h`, `⟳45m`) appears when usage reaches `CC_RED` or the reset is within `CC_RESET_SOON` minutes |
 | `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`, shortened to `CC_BRANCH_MIN` under width pressure |
 | `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); hidden with `CC_TOKENS=0` |
-| `⇧ v1.4` | Shown once after a self-update, naming the new version |
+| `⇧ v1.6` | Shown once after a self-update, naming the new version |
 
 Numeric segments are right-padded to a fixed width, so the line does not shift
 as values change digit count; the 5h reset tail is the exception and adds width
@@ -88,8 +88,13 @@ Exercise it without a live session (from a checkout of this repository):
 
     Opus 4.8 max · █░░░░░░  12% · 123k/1m ·  30% · ⎇ main
 
-Constrain the width to watch it collapse — the bar drops and the token count takes the
-fill color:
+Constrain the width to watch it collapse. The bar narrows first:
+
+    echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | COLUMNS=55 bash statusline.sh
+
+    Opus 4.8 max · █░░░░  12% · 123k/1m ·  30% · ⎇ main
+
+then goes entirely, and the token count takes the fill color:
 
     echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | COLUMNS=50 bash statusline.sh
 
