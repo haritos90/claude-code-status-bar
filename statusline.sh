@@ -62,13 +62,32 @@ sep=" ${DIM}·${R} "
 # task-17: CC_CELLS overrides the width so an auto-update does not clobber a chosen
 # value; the default reproduces the prior fixed CELLS=7.
 CELLS=${CC_CELLS:-7}
-filled=$(( (${pct:-0} * CELLS + 50) / 100 ))
-[ "$filled" -gt "$CELLS" ] && filled=$CELLS
-[ "$filled" -lt 0 ] && filled=0
-fstr=""; estr=""; i=0
-while [ "$i" -lt "$filled" ]; do fstr="${fstr}█"; i=$((i+1)); done
-i=0; while [ "$i" -lt $((CELLS - filled)) ]; do estr="${estr}░"; i=$((i+1)); done
-bar="${C}${fstr}${DIM}${estr}${R}"
+# task-50: the ladder narrows the bar before dropping it, so three widths are built:
+# CELLS, then 5/7 and 3/7 of it (the default 7 yields 5 and 3), never below one cell.
+# mkbar assigns BAR instead of printing so the caller needs no command substitution;
+# rounding matches the previous single-bar computation at every width.
+# task-50: superseded — the single bar was built inline:
+# filled=$(( (${pct:-0} * CELLS + 50) / 100 ))
+# [ "$filled" -gt "$CELLS" ] && filled=$CELLS
+# [ "$filled" -lt 0 ] && filled=0
+# fstr=""; estr=""; i=0
+# while [ "$i" -lt "$filled" ]; do fstr="${fstr}█"; i=$((i+1)); done
+# i=0; while [ "$i" -lt $((CELLS - filled)) ]; do estr="${estr}░"; i=$((i+1)); done
+# bar="${C}${fstr}${DIM}${estr}${R}"
+mkbar() {                                  # $1 = cells; sets BAR
+  local cells=$1 filled fstr="" estr="" i=0
+  filled=$(( (${pct:-0} * cells + 50) / 100 ))
+  [ "$filled" -gt "$cells" ] && filled=$cells
+  [ "$filled" -lt 0 ] && filled=0
+  while [ "$i" -lt "$filled" ]; do fstr="${fstr}█"; i=$((i+1)); done
+  i=0; while [ "$i" -lt $((cells - filled)) ]; do estr="${estr}░"; i=$((i+1)); done
+  BAR="${C}${fstr}${DIM}${estr}${R}"
+}
+CELLS1=$(( (CELLS * 5 + 3) / 7 )); [ "$CELLS1" -lt 1 ] && CELLS1=1
+CELLS2=$(( (CELLS * 3 + 3) / 7 )); [ "$CELLS2" -lt 1 ] && CELLS2=1
+mkbar "$CELLS";  bar=$BAR
+mkbar "$CELLS1"; bar1=$BAR
+mkbar "$CELLS2"; bar2=$BAR
 
 # task-35: integer arithmetic replaces the two awk spawns per call. The task-11
 # radix concern is gone with awk: the tenth digit is computed and printed as an
@@ -236,12 +255,16 @@ fi
 head="${BOLD}${model}${R}${fbmark}"
 [ -n "$effort" ] && head="${head} ${DIM}${effort}${R}"
 
-# task-26: three width tiers for the context segment (each carries its leading sep).
+# task-26: width tiers for the context segment (each carries its leading sep).
 # ctx0 (full) is the bar + colored pct + dim tokens, as before. Under width pressure
-# the bar is dropped (ctx1: colored pct + colored token count), then the pct too
-# (ctx2: colored token count only). The used figure takes the fill color the bar
-# otherwise carried; the denominator stays dim. The widest tier that fits is chosen
-# after the whole line is assembled (see the COLUMNS check below).
+# the bar is dropped (colored pct + colored token count), then the pct too (colored
+# token count only). The used figure takes the fill color the bar otherwise carried;
+# the denominator stays dim. The widest tier that fits is chosen after the whole line
+# is assembled (see the COLUMNS check below).
+# task-50: the bar narrows before it goes, so there are five tiers: the bar at CELLS
+# (ctx0), at CELLS1 (ctx1) and at CELLS2 (ctx2) — all three with the dim count — then
+# the bar-less pct tier (ctx3) and the count alone (ctx4). The formatted pieces are
+# built once and shared, so the two added tiers cost no further command substitutions.
 # task-43: while the prompt cache is cold — the session idled past the cache TTL
 # from the transcript pass (0 = unknown, defaults to 3600 s) — the used count
 # renders amber in every tier: those tokens will be rewritten into the cache by
@@ -256,9 +279,19 @@ fi
 # task-43: superseded — ctx0="${sep}${bar} ${C}$(pad 4 "${pct}%")${R}${sep}${DIM}$(pad 4 "$(fmt "$used")")/$(fmt "$total")${R}"
 # task-43: superseded — ctx1="${sep}${C}$(pad 4 "${pct}%")${R}${sep}${C}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
 # task-43: superseded — ctx2="${sep}${C}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
-ctx0="${sep}${bar} ${C}$(pad 4 "${pct}%")${R}${sep}${UC}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
-ctx1="${sep}${C}$(pad 4 "${pct}%")${R}${sep}${UC1}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
-ctx2="${sep}${UC1}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+# task-50: superseded — the three tiers repeated the pad/fmt substitutions:
+# ctx0="${sep}${bar} ${C}$(pad 4 "${pct}%")${R}${sep}${UC}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+# ctx1="${sep}${C}$(pad 4 "${pct}%")${R}${sep}${UC1}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+# ctx2="${sep}${UC1}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+pctf=$(pad 4 "${pct}%"); usedf=$(pad 4 "$(fmt "$used")"); totalf=$(fmt "$total")
+pctseg="${C}${pctf}${R}"
+cntdim="${UC}${usedf}${R}${DIM}/${totalf}${R}"      # bar present: the count stays dim
+cntlit="${UC1}${usedf}${R}${DIM}/${totalf}${R}"     # bar gone: the count takes the fill
+ctx0="${sep}${bar} ${pctseg}${sep}${cntdim}"
+ctx1="${sep}${bar1} ${pctseg}${sep}${cntdim}"
+ctx2="${sep}${bar2} ${pctseg}${sep}${cntdim}"
+ctx3="${sep}${pctseg}${sep}${cntlit}"
+ctx4="${sep}${cntlit}"
 
 # rest — everything after the context segment; independent of the chosen tier.
 rest=""
@@ -411,7 +444,8 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   #   for cand in "$ctx0" "$ctx1" "$ctx2"; do ctx="$cand"; measure "${head}${ctx}${rest}"; done
   # task-39: the walk covers (ctx,tok,branch) trios. task-49 orders them by how much
   # each segment duplicates what the line already shows: the bar goes first because it
-  # renders the percentage printed beside it, then write, then read, then the branch
+  # renders the percentage printed beside it — task-50 narrows it through CELLS1 and
+  # CELLS2 before removing it — then write, then read, then the branch
   # shortens to CC_BRANCH_MIN, and the percentage goes last — the cumulative token
   # figures appear nowhere else in the interface, so they outrank the bar. With
   # CC_TOKENS=0 the tok tiers are empty and the walk degenerates accordingly.
@@ -435,7 +469,10 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # task-48: superseded — done
   # task-49: superseded — the bar outlived both token figures and the full branch:
   # tiers=("ctx0 tok0 br0" "ctx0 tok1 br0" "ctx0 tok2 br0" "ctx0 tok2 br1" "ctx1 tok2 br1" "ctx2 tok2 br1")
-  tiers=("ctx0 tok0 br0" "ctx1 tok0 br0" "ctx1 tok1 br0" "ctx1 tok2 br0" "ctx1 tok2 br1" "ctx2 tok2 br1")
+  # task-50: superseded — the bar was all-or-nothing (ctx1 was the bar-less tier):
+  # tiers=("ctx0 tok0 br0" "ctx1 tok0 br0" "ctx1 tok1 br0" "ctx1 tok2 br0" "ctx1 tok2 br1" "ctx2 tok2 br1")
+  tiers=("ctx0 tok0 br0" "ctx1 tok0 br0" "ctx2 tok0 br0" "ctx3 tok0 br0" \
+         "ctx3 tok1 br0" "ctx3 tok2 br0" "ctx3 tok2 br1" "ctx4 tok2 br1")
   cands=()
   for trio in "${tiers[@]}"; do
     read -r cn tn bn <<< "$trio"

@@ -57,7 +57,7 @@ manually.
 |---|---|
 | `Opus 4.8` | Model; the ` (1M context)` suffix is trimmed |
 | `max` | Reasoning effort; omitted when absent |
-| bar + `12%` | Context-window fill; green below 50, amber 50–79, red 80 and above |
+| bar + `12%` | Context-window fill; green below 50, amber 50–79, red 80 and above. The bar is `CC_CELLS` cells wide and narrows under width pressure |
 | `123k/1m` | Tokens in context / context-window size. The count turns amber while the prompt cache is cold — the session has idled past the cache TTL (1h or 5m, read from the transcript), so the next request rewrites the whole context into the cache. When the bar is collapsed the count carries the fill color instead |
 | `30%` | Rolling 5-hour rate-limit usage, in the usual green/amber/red. A reset tail (`⟳2.4h`, `⟳45m`) appears when usage reaches `CC_RED` or the reset is within `CC_RESET_SOON` minutes |
 | `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`, shortened to `CC_BRANCH_MIN` under width pressure |
@@ -69,11 +69,13 @@ as values change digit count; the 5h reset tail is the exception and adds width
 only while it is shown.
 
 When the assembled line is wider than the terminal it collapses in priority order,
-shedding what the line states twice before what it states once: the context bar is
-dropped first — it draws the percentage printed beside it — and its fill color moves
-onto the token count; then the session `w:` (write) figure, then `r:` (read); then
-the branch is shortened to `CC_BRANCH_MIN`; finally the percentage is dropped too.
-The widest form that fits is shown. This reads the terminal width from the `COLUMNS` variable Claude
+shedding what the line states twice before what it states once. The context bar goes
+first, since it draws the percentage printed beside it: it narrows to 5/7 and then
+3/7 of `CC_CELLS` (with the default 7, to 5 and then 3 cells, never below one) and is
+then dropped altogether, its fill color moving onto the token count. After that the
+session `w:` (write) figure is dropped, then `r:` (read); then the branch is shortened
+to `CC_BRANCH_MIN`; finally the percentage is dropped too. The widest form that fits
+is shown. This reads the terminal width from the `COLUMNS` variable Claude
 Code exports (2.1.153+) and fits the line into `COLUMNS` minus a `CC_RESERVE`
 reserve (default 4): Claude Code draws the status line inside a padded box narrower
 than the terminal, so a line reaching the box edge would be cut with an ellipsis
@@ -100,7 +102,7 @@ Set these as environment variables in the `statusLine.command`, for example
 
 | Option | Default | Description |
 |---|---|---|
-| `CC_CELLS` | `7` | Context bar width in cells |
+| `CC_CELLS` | `7` | Context bar width in cells at the widest tier; the collapse ladder narrows it to 5/7 and 3/7 of this before dropping it |
 | `CC_COMPACT` | `1` | Collapse the line to fit the terminal width; set `0` to always keep the full line |
 | `CC_RESERVE` | `4` | Columns subtracted from `COLUMNS` when fitting — the padding Claude Code draws around the status line; `0` fits to the full width |
 | `CC_TOKENS` | `1` | Show the cumulative session read/write token segment; set `0` to hide it |
