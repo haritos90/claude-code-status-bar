@@ -68,11 +68,12 @@ Numeric segments are right-padded to a fixed width, so the line does not shift
 as values change digit count; the 5h reset tail is the exception and adds width
 only while it is shown.
 
-When the assembled line is wider than the terminal it collapses in priority order:
-the session `w:` (write) figure is dropped, then `r:` (read); then the branch is
-shortened to `CC_BRANCH_MIN`; then the context bar is dropped and its fill color
-moves onto the token count; finally the percentage is dropped too. The widest form
-that fits is shown. This reads the terminal width from the `COLUMNS` variable Claude
+When the assembled line is wider than the terminal it collapses in priority order,
+shedding what the line states twice before what it states once: the context bar is
+dropped first — it draws the percentage printed beside it — and its fill color moves
+onto the token count; then the session `w:` (write) figure, then `r:` (read); then
+the branch is shortened to `CC_BRANCH_MIN`; finally the percentage is dropped too.
+The widest form that fits is shown. This reads the terminal width from the `COLUMNS` variable Claude
 Code exports (2.1.153+) and fits the line into `COLUMNS` minus a `CC_RESERVE`
 reserve (default 4): Claude Code draws the status line inside a padded box narrower
 than the terminal, so a line reaching the box edge would be cut with an ellipsis

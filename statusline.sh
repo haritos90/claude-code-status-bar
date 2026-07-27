@@ -395,8 +395,8 @@ fi
 # keeps the full bar, matching the prior output. Visible width strips ANSI SGR and UTF-8
 # continuation bytes so each multi-byte cell (█ ░ · ⎇) counts as one column, and is
 # measured against the fully assembled line including tokens, 5h, branch, and markers.
-# task-32: the ladder now also collapses the token-throughput segment (tok0->tok1->tok2)
-# ahead of the context bar; see the pair list below.
+# task-32: the ladder also collapses the token-throughput segment (tok0->tok1->tok2);
+# task-49 puts the bar ahead of it in the order. See the tier list below.
 cols=${COLUMNS:-0}
 ctx="$ctx0"; tok="$tok0"; brseg="$br0"
 if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
@@ -409,8 +409,11 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   budget=$(( cols - ${CC_RESERVE:-4} ))
   # task-32: superseded — the collapse iterated context tiers only:
   #   for cand in "$ctx0" "$ctx1" "$ctx2"; do ctx="$cand"; measure "${head}${ctx}${rest}"; done
-  # task-39: the walk now covers (ctx,tok,branch) trios: drop write, then read,
-  # then shorten the branch to CC_BRANCH_MIN, then the bar, then the pct. With
+  # task-39: the walk covers (ctx,tok,branch) trios. task-49 orders them by how much
+  # each segment duplicates what the line already shows: the bar goes first because it
+  # renders the percentage printed beside it, then write, then read, then the branch
+  # shortens to CC_BRANCH_MIN, and the percentage goes last — the cumulative token
+  # figures appear nowhere else in the interface, so they outrank the bar. With
   # CC_TOKENS=0 the tok tiers are empty and the walk degenerates accordingly.
   # Indirect ${!name} expands the tier variables named in each trio.
   # task-48: measuring inside the walk spawned one awk per candidate — up to six per
@@ -430,7 +433,9 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # task-46: superseded — [ "$vis" -le "$cols" ] && break
   # task-48: superseded —   [ "$vis" -le "$budget" ] && break
   # task-48: superseded — done
-  tiers=("ctx0 tok0 br0" "ctx0 tok1 br0" "ctx0 tok2 br0" "ctx0 tok2 br1" "ctx1 tok2 br1" "ctx2 tok2 br1")
+  # task-49: superseded — the bar outlived both token figures and the full branch:
+  # tiers=("ctx0 tok0 br0" "ctx0 tok1 br0" "ctx0 tok2 br0" "ctx0 tok2 br1" "ctx1 tok2 br1" "ctx2 tok2 br1")
+  tiers=("ctx0 tok0 br0" "ctx1 tok0 br0" "ctx1 tok1 br0" "ctx1 tok2 br0" "ctx1 tok2 br1" "ctx2 tok2 br1")
   cands=()
   for trio in "${tiers[@]}"; do
     read -r cn tn bn <<< "$trio"
