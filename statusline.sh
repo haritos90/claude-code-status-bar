@@ -83,8 +83,11 @@ mkbar() {                                  # $1 = cells; sets BAR
   i=0; while [ "$i" -lt $((cells - filled)) ]; do estr="${estr}░"; i=$((i+1)); done
   BAR="${C}${fstr}${DIM}${estr}${R}"
 }
-CELLS1=$(( (CELLS * 5 + 3) / 7 )); [ "$CELLS1" -lt 1 ] && CELLS1=1
-CELLS2=$(( (CELLS * 3 + 3) / 7 )); [ "$CELLS2" -lt 1 ] && CELLS2=1
+# superseded — CELLS1=$(( (CELLS * 5 + 3) / 7 )); [ "$CELLS1" -lt 1 ] && CELLS1=1
+# superseded — CELLS2=$(( (CELLS * 3 + 3) / 7 )); [ "$CELLS2" -lt 1 ] && CELLS2=1
+# A zero-cell bar stays zero at every tier.
+CELLS1=$(( (CELLS * 5 + 3) / 7 )); [ "$CELLS1" -lt 1 ] && [ "$CELLS" -ge 1 ] && CELLS1=1
+CELLS2=$(( (CELLS * 3 + 3) / 7 )); [ "$CELLS2" -lt 1 ] && [ "$CELLS" -ge 1 ] && CELLS2=1
 mkbar "$CELLS";  bar=$BAR
 mkbar "$CELLS1"; bar1=$BAR
 mkbar "$CELLS2"; bar2=$BAR
