@@ -71,7 +71,7 @@ manually.
 | `7d  95% ⟳ 8.3h` | Rolling 7-day rate-limit usage and time to its reset (`⟳ 3.5d`, `⟳  15h`, `⟳ 8.3h`, `⟳  45m`). Shown from `CC_AMBER` usage; at `CC_RED` it is never dropped |
 | `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`, shortened to `CC_BRANCH_MIN` under width pressure |
 | `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); hidden with `CC_TOKENS=0` |
-| `⇧ v1.6` | Shown once after a self-update, naming the new version |
+| `⇧ v1.7` | Shown once after a self-update, naming the new version |
 
 Numeric segments, the reset tail included, are right-padded to a fixed width, so
 the line does not shift as values change digit count.
