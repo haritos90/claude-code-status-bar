@@ -297,8 +297,8 @@ ctx2="${sep}${bar2} ${pctseg}${sep}${cntdim}"
 ctx3="${sep}${pctseg}${sep}${cntlit}"
 ctx4="${sep}${cntlit}"
 
-# rest — everything after the context segment; independent of the chosen tier.
-rest=""
+# rest — the 5h segment; the ladder picks rs0 or rs1.
+rest=""; rs0=""; rs1=""
 # 5-hour rate-limit usage — task-38: bare colored percent, the dim "5h" label is
 # dropped. A reset tail (⟳ 2.4h / ⟳ 45m, in the percent's color) appears only when
 # the figure is actionable: usage at or above CC_RED, or the reset within
@@ -306,24 +306,48 @@ rest=""
 # non-numeric value, or a reset not in the future, yields no tail. Remaining time
 # formats as tenth-hours at or above 90 minutes, whole minutes below.
 # task-38: superseded — rest="${rest}${sep}${DIM}5h ${R}${LC}$(pad 4 "${lim5}%")${R}"
+# superseded — the tail showed only when urgent:
+# if [ -n "$lim5" ]; then
+#   LC=$(col "$lim5")
+#   seg5="${LC}$(pad 4 "${lim5}%")${R}"
+#   case "$reset5" in *[!0-9]*) reset5="" ;; esac
+#   if [ -n "$reset5" ] && [ "$reset5" -gt "$now" ]; then
+#     rem=$(( reset5 - now ))
+#     if [ "$lim5" -ge "${CC_RED:-80}" ] || [ "$rem" -le $(( ${CC_RESET_SOON:-15} * 60 )) ]; then
+#       # Space after ⟳: a fallback-font glyph covers the next cell.
+#       if [ "$rem" -ge 5400 ]; then
+#         t=$(( (rem + 180) / 360 ))
+#         seg5="${seg5} ${LC}⟳ $(( t / 10 )).$(( t % 10 ))h${R}"
+#       else
+#         seg5="${seg5} ${LC}⟳ $(( (rem + 30) / 60 ))m${R}"
+#       fi
+#     fi
+#   fi
+#   rest="${rest}${sep}${seg5}"
+# fi
+# The tail shows when it fits; urgent tails are pinned.
 if [ -n "$lim5" ]; then
   LC=$(col "$lim5")
   seg5="${LC}$(pad 4 "${lim5}%")${R}"
+  tail5=""; pin5=0
   case "$reset5" in *[!0-9]*) reset5="" ;; esac
   if [ -n "$reset5" ] && [ "$reset5" -gt "$now" ]; then
     rem=$(( reset5 - now ))
+    if [ "$rem" -ge 5400 ]; then
+      t=$(( (rem + 180) / 360 )); tv="$(( t / 10 )).$(( t % 10 ))h"
+    else
+      tv="$(( (rem + 30) / 60 ))m"
+    fi
+    # Space after ⟳: a fallback-font glyph covers the next cell.
+    tail5=" ${LC}⟳ $(pad 4 "$tv")${R}"
     if [ "$lim5" -ge "${CC_RED:-80}" ] || [ "$rem" -le $(( ${CC_RESET_SOON:-15} * 60 )) ]; then
-      # Space after ⟳: a fallback-font glyph covers the next cell.
-      if [ "$rem" -ge 5400 ]; then
-        t=$(( (rem + 180) / 360 ))
-        seg5="${seg5} ${LC}⟳ $(( t / 10 )).$(( t % 10 ))h${R}"
-      else
-        seg5="${seg5} ${LC}⟳ $(( (rem + 30) / 60 ))m${R}"
-      fi
+      pin5=1
     fi
   fi
-  rest="${rest}${sep}${seg5}"
+  rs0="${sep}${seg5}${tail5}"
+  rs1="${sep}${seg5}"; [ "$pin5" = 1 ] && rs1=$rs0
 fi
+rest=$rs0
 
 # git branch — task-35: parsed from the repository's HEAD file; spawning git put
 # its name into terminal title bars on every render. Walk up from cwd to .git,
@@ -478,12 +502,18 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # tiers=("ctx0 tok0 br0" "ctx0 tok1 br0" "ctx0 tok2 br0" "ctx0 tok2 br1" "ctx1 tok2 br1" "ctx2 tok2 br1")
   # task-50: superseded — the bar was all-or-nothing (ctx1 was the bar-less tier):
   # tiers=("ctx0 tok0 br0" "ctx1 tok0 br0" "ctx1 tok1 br0" "ctx1 tok2 br0" "ctx1 tok2 br1" "ctx2 tok2 br1")
-  tiers=("ctx0 tok0 br0" "ctx1 tok0 br0" "ctx2 tok0 br0" "ctx3 tok0 br0" \
-         "ctx3 tok1 br0" "ctx3 tok2 br0" "ctx3 tok2 br1" "ctx4 tok2 br1")
+  # superseded — tiers=("ctx0 tok0 br0" "ctx1 tok0 br0" "ctx2 tok0 br0" "ctx3 tok0 br0" \
+  # superseded —        "ctx3 tok1 br0" "ctx3 tok2 br0" "ctx3 tok2 br1" "ctx4 tok2 br1")
+  # A non-urgent reset tail drops right after the bar.
+  tiers=("ctx0 tok0 br0 rs0" "ctx1 tok0 br0 rs0" "ctx2 tok0 br0 rs0" "ctx3 tok0 br0 rs0" \
+         "ctx3 tok0 br0 rs1" "ctx3 tok1 br0 rs1" "ctx3 tok2 br0 rs1" "ctx3 tok2 br1 rs1" \
+         "ctx4 tok2 br1 rs1")
   cands=()
   for trio in "${tiers[@]}"; do
-    read -r cn tn bn <<< "$trio"
-    cands+=("${head}${!cn}${rest}${!bn}${!tn}${tailseg}")
+    # superseded — read -r cn tn bn <<< "$trio"
+    # superseded — cands+=("${head}${!cn}${rest}${!bn}${!tn}${tailseg}")
+    read -r cn tn bn rn <<< "$trio"
+    cands+=("${head}${!cn}${!rn}${!bn}${!tn}${tailseg}")
   done
   sel=$(( ${#tiers[@]} - 1 ))               # none fits -> the narrowest tier, as before
   i=0
@@ -491,8 +521,10 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
     [ "$vis" -le "$budget" ] && { sel=$i; break; }
     i=$((i+1))
   done < <(printf '%s\n' "${cands[@]}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
-  read -r cn tn bn <<< "${tiers[$sel]}"
-  ctx=${!cn}; tok=${!tn}; brseg=${!bn}
+  # superseded — read -r cn tn bn <<< "${tiers[$sel]}"
+  # superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}
+  read -r cn tn bn rn <<< "${tiers[$sel]}"
+  ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}
 fi
 # task-37: the token tiers render after rest (5h) and the branch instead of
 # between the context segment and rest; the collapse ladder still drops them first.
