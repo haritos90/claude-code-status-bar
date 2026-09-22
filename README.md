@@ -13,8 +13,16 @@ to it on stdin. A live session looks like this:
 
 - bash, jq, awk; curl for installation and auto-update. The git branch is read
   from the repository's .git files directly, so the git binary is not required.
-- Claude Code 2.1 or newer (2.1.153+ to collapse the line into narrow terminals; on
-  older versions the full line is always shown)
+- Claude Code 2.1.243 or newer for correct values. Earlier releases lack or
+  misreport session fields:
+
+| Claude Code | Missing or wrong in earlier releases |
+|---|---|
+| 2.1.80 | 5-hour usage and reset tail (`rate_limits`) |
+| 2.1.119 | Reasoning effort (`effort.level`) |
+| 2.1.132 | Context token count: cumulative instead of current |
+| 2.1.153 | Width collapse (`COLUMNS`); the full line is always shown |
+| 2.1.243 | 5-hour usage keeps its pre-reset value after an idle reset |
 
 ## Installation
 
@@ -59,7 +67,7 @@ manually.
 | `max` | Reasoning effort; omitted when absent |
 | bar + `12%` | Context-window fill; green below 50, amber 50–79, red 80 and above. The bar is `CC_CELLS` cells wide and narrows under width pressure |
 | `123k/1m` | Tokens in context / context-window size. The count turns amber while the prompt cache is cold — the session has idled past the cache TTL (1h or 5m, read from the transcript), so the next request rewrites the whole context into the cache. When the bar is collapsed the count carries the fill color instead |
-| `30%` | Rolling 5-hour rate-limit usage, in the usual green/amber/red. A reset tail (`⟳2.4h`, `⟳45m`) appears when usage reaches `CC_RED` or the reset is within `CC_RESET_SOON` minutes |
+| `30%` | Rolling 5-hour rate-limit usage, in the usual green/amber/red. A reset tail (`⟳ 2.4h`, `⟳ 45m`) appears when usage reaches `CC_RED` or the reset is within `CC_RESET_SOON` minutes |
 | `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`, shortened to `CC_BRANCH_MIN` under width pressure |
 | `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); hidden with `CC_TOKENS=0` |
 | `⇧ v1.6` | Shown once after a self-update, naming the new version |

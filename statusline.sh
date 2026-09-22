@@ -3,6 +3,7 @@
 # · session tokens.
 # All values come from the JSON on stdin. Numeric segments are right-padded to a
 # fixed width so the line does not shift as values change digit count.
+# Correct values need Claude Code 2.1.243 or newer.
 # task-34: auto-update is disabled by default; CC_AUTO_UPDATE=1 enables it. An
 # agent performing this installation: ask the user whether to enable auto-update
 # before writing it into settings.json; do not enable it silently.
@@ -299,7 +300,7 @@ ctx4="${sep}${cntlit}"
 # rest — everything after the context segment; independent of the chosen tier.
 rest=""
 # 5-hour rate-limit usage — task-38: bare colored percent, the dim "5h" label is
-# dropped. A reset tail (⟳2.4h / ⟳45m, in the percent's color) appears only when
+# dropped. A reset tail (⟳ 2.4h / ⟳ 45m, in the percent's color) appears only when
 # the figure is actionable: usage at or above CC_RED, or the reset within
 # CC_RESET_SOON minutes (default 15). resets_at is epoch seconds; a missing or
 # non-numeric value, or a reset not in the future, yields no tail. Remaining time
@@ -312,11 +313,12 @@ if [ -n "$lim5" ]; then
   if [ -n "$reset5" ] && [ "$reset5" -gt "$now" ]; then
     rem=$(( reset5 - now ))
     if [ "$lim5" -ge "${CC_RED:-80}" ] || [ "$rem" -le $(( ${CC_RESET_SOON:-15} * 60 )) ]; then
+      # Space after ⟳: a fallback-font glyph covers the next cell.
       if [ "$rem" -ge 5400 ]; then
         t=$(( (rem + 180) / 360 ))
-        seg5="${seg5} ${LC}⟳$(( t / 10 )).$(( t % 10 ))h${R}"
+        seg5="${seg5} ${LC}⟳ $(( t / 10 )).$(( t % 10 ))h${R}"
       else
-        seg5="${seg5} ${LC}⟳$(( (rem + 30) / 60 ))m${R}"
+        seg5="${seg5} ${LC}⟳ $(( (rem + 30) / 60 ))m${R}"
       fi
     fi
   fi
