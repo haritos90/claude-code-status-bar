@@ -65,9 +65,9 @@ manually.
 |---|---|
 | `Opus 4.8` | Model; the ` (1M context)` suffix is trimmed |
 | `max` | Reasoning effort; omitted when absent |
-| bar + `12%` | Context-window fill; green below 50, amber 50–79, red 80 and above. The bar is `CC_CELLS` cells wide and narrows under width pressure |
+| bar + `12%` | Context-window fill on a calm gradient: muted green that warms from `CC_AMBER`, turns orange around `CC_RED` and red at 100%. The bar is `CC_CELLS` cells wide and narrows under width pressure |
 | `123k/1m` | Tokens in context / context-window size. The count turns amber while the prompt cache is cold — the session has idled past the cache TTL (1h or 5m, read from the transcript), so the next request rewrites the whole context into the cache. When the bar is collapsed the count carries the fill color instead |
-| `30%` | Rolling 5-hour rate-limit usage, in the usual green/amber/red. The reset tail (`⟳ 2.4h`, `⟳  45m`) is time to the reset, shown when the line has room. At `CC_RED` usage or within `CC_RESET_SOON` minutes of the reset it is never dropped |
+| `30%` | Rolling 5-hour rate-limit usage, on the same gradient. The reset tail (`⟳ 2.4h`, `⟳  45m`) is time to the reset, shown when the line has room. At `CC_RED` usage or within `CC_RESET_SOON` minutes of the reset it is never dropped |
 | `7d  95% ⟳ 8.3h` | Rolling 7-day rate-limit usage and time to its reset (`⟳ 3.5d`, `⟳  15h`, `⟳ 8.3h`, `⟳  45m`). Shown from `CC_AMBER` usage; at `CC_RED` it is never dropped |
 | `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`, shortened to `CC_BRANCH_MIN` under width pressure |
 | `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); hidden with `CC_TOKENS=0` |
@@ -121,7 +121,7 @@ Set these as environment variables in the `statusLine.command`, for example
 | `CC_COMPACT` | `1` | Collapse the line to fit the terminal width; set `0` to always keep the full line |
 | `CC_RESERVE` | `4` | Columns subtracted from `COLUMNS` when fitting — the padding Claude Code draws around the status line; `0` fits to the full width |
 | `CC_TOKENS` | `1` | Show the cumulative session read/write token segment; set `0` to hide it |
-| `CC_AMBER` / `CC_RED` | `50` / `80` | Amber and red percentage boundaries (context fill, 5h and weekly usage); the weekly segment shows from `CC_AMBER` and is never dropped from `CC_RED` |
+| `CC_AMBER` / `CC_RED` | `50` / `80` | Color gradient anchors (context fill, 5h and weekly usage): warming starts at `CC_AMBER`, orange around `CC_RED`. The weekly segment shows from `CC_AMBER`; at `CC_RED` the reset tail and the weekly segment are never dropped |
 | `CC_RESET_SOON` | `15` | Minutes to the 5h reset under which the reset tail is never dropped |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
 | `CC_BRANCH_MIN` | `10` | Branch length when the collapse ladder shortens it |

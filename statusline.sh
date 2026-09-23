@@ -51,11 +51,26 @@ lim5=${lim5%.*}
 lim7=${lim7%.*}
 
 R=$'\033[0m'; DIM=$'\033[38;2;120;120;120m'; BOLD=$'\033[1m'
-col() { # pct -> ANSI color; task-17: amber/red boundaries via CC_AMBER/CC_RED
-  if   [ "${1:-0}" -ge "${CC_RED:-80}" ]; then printf '\033[38;2;225;95;75m'
-  elif [ "${1:-0}" -ge "${CC_AMBER:-50}" ]; then printf '\033[38;2;240;190;70m'
-  else printf '\033[38;2;120;190;120m'
-  fi
+AMB=$'\033[38;2;240;190;70m'; GRN=$'\033[38;2;120;190;120m'   # fixed marker colors
+# superseded — col() { # pct -> ANSI color; task-17: amber/red boundaries via CC_AMBER/CC_RED
+# superseded —   if   [ "${1:-0}" -ge "${CC_RED:-80}" ]; then printf '\033[38;2;225;95;75m'
+# superseded —   elif [ "${1:-0}" -ge "${CC_AMBER:-50}" ]; then printf '\033[38;2;240;190;70m'
+# superseded —   else printf '\033[38;2;120;190;120m'
+# superseded —   fi
+# superseded — }
+# Calm gradient: muted green warms from CC_AMBER, red at 100.
+col() { # pct -> ANSI color
+  local p=${1:-0} a=${CC_AMBER:-50} r=${CC_RED:-80} i=1 p0 p1 k s
+  [ "$p" -lt 0 ] && p=0; [ "$p" -gt 100 ] && p=100
+  [ "$r" -lt "$a" ] && r=$a
+  local P=(0 "$a" $(( a + (r - a) * 2 / 3 )) $(( r + (100 - r) / 4 )) 100)
+  local RR=(110 135 200 230 230) GG=(140 165 175 140 85) BB=(110 110 95 80 70)
+  while [ "$i" -lt 4 ] && [ "$p" -gt "${P[$i]}" ]; do i=$((i+1)); done
+  p0=${P[$((i-1))]}; p1=${P[$i]}; s=$(( p1 - p0 )); [ "$s" -le 0 ] && s=1; k=$(( p - p0 ))
+  printf '\033[38;2;%d;%d;%dm' \
+    $(( RR[i-1] + (RR[i] - RR[i-1]) * k / s )) \
+    $(( GG[i-1] + (GG[i] - GG[i-1]) * k / s )) \
+    $(( BB[i-1] + (BB[i] - BB[i-1]) * k / s ))
 }
 pad() { printf "%${1}s" "$2"; }   # right-align $2 to width $1 (fixed-width segments)
 C=$(col "$pct")
@@ -251,7 +266,8 @@ if [ -n "$tpath" ] && [ -f "$tpath" ]; then
     # task-43: superseded — printf '%s %s %s %s %s\n' "$sz" "$mt" "$rd" "$wr" "$fbto" > "$tf"
     mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s %s %s %s\n' "$sz" "$mt" "$rd" "$wr" "$ttl" "$fbto" > "$tf" 2>/dev/null
   fi
-  [ -n "$fbto" ] && [ "$fbto" = "$modelid" ] && fbmark=" $(col 50)⤵${R}"
+  # superseded — [ -n "$fbto" ] && [ "$fbto" = "$modelid" ] && fbmark=" $(col 50)⤵${R}"
+  [ -n "$fbto" ] && [ "$fbto" = "$modelid" ] && fbmark=" ${AMB}⤵${R}"
   if [ "${CC_TOKENS:-1}" != "0" ] && { [ "$rd" -gt 0 ] || [ "$wr" -gt 0 ]; }; then
     tok0="${sep}${DIM}r:${R}$(pad 4 "$(fmt "$rd")") ${DIM}w:${R}$(pad 4 "$(fmt "$wr")")"
     tok1="${sep}${DIM}r:${R}$(pad 4 "$(fmt "$rd")")"
@@ -475,7 +491,8 @@ if [ -f "$CACHE_DIR/applied-version" ]; then
   [ -f "$CACHE_DIR/announced-version" ] && IFS= read -r ann < "$CACHE_DIR/announced-version" 2>/dev/null
   if [ -n "$av" ] && [ "$av" != "$ann" ]; then
     # task-37: superseded — rest="${rest}${sep}$(col 0)⇧ v${av}${R}"
-    tailseg="${sep}$(col 0)⇧ v${av}${R}"
+    # superseded — tailseg="${sep}$(col 0)⇧ v${av}${R}"
+    tailseg="${sep}${GRN}⇧ v${av}${R}"
     printf '%s' "$av" > "$CACHE_DIR/announced-version" 2>/dev/null
   fi
 fi
