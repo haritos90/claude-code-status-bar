@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Claude Code status line — model · effort · context bar · 5h limit · git branch
-# · session tokens.
+# Claude Code status line — model · effort · context bar · 5h limit · 7d limit
+# · git branch · session tokens.
 # All values come from the JSON on stdin. Numeric segments are right-padded to a
 # fixed width so the line does not shift as values change digit count.
 # Correct values need Claude Code 2.1.243 or newer.
@@ -37,14 +37,18 @@ fields=$(printf '%s' "$input" | jq -r '
   (.model.id // ""),
   (.transcript_path // ""),
   (.session_id // "default"),
-  (.rate_limits.five_hour.resets_at // "")' 2>/dev/null)
+  (.rate_limits.five_hour.resets_at // ""),
+  (.rate_limits.seven_day.used_percentage // ""),
+  (.rate_limits.seven_day.resets_at // "")' 2>/dev/null)
 { IFS= read -r model; IFS= read -r effort; IFS= read -r used
   IFS= read -r total; IFS= read -r pct;    IFS= read -r lim5
   IFS= read -r cwd;   IFS= read -r modelid; IFS= read -r tpath
-  IFS= read -r sid;   IFS= read -r reset5; } <<< "$fields"
+  IFS= read -r sid;   IFS= read -r reset5
+  IFS= read -r lim7;  IFS= read -r reset7; } <<< "$fields"
 model=${model% (1M context)}
 pct=${pct%.*}
 lim5=${lim5%.*}
+lim7=${lim7%.*}
 
 R=$'\033[0m'; DIM=$'\033[38;2;120;120;120m'; BOLD=$'\033[1m'
 col() { # pct -> ANSI color; task-17: amber/red boundaries via CC_AMBER/CC_RED
@@ -349,6 +353,30 @@ if [ -n "$lim5" ]; then
 fi
 rest=$rs0
 
+# Weekly usage: shown from CC_AMBER, pinned from CC_RED.
+wk=""; wk0=""; wk1=""
+if [ -n "$lim7" ] && [ "$lim7" -ge "${CC_AMBER:-50}" ]; then
+  WC=$(col "$lim7")
+  seg7="${DIM}7d ${R}${WC}$(pad 4 "${lim7}%")${R}"
+  case "$reset7" in *[!0-9]*) reset7="" ;; esac
+  if [ -n "$reset7" ] && [ "$reset7" -gt "$now" ]; then
+    rem7=$(( reset7 - now ))
+    if [ "$rem7" -ge 86400 ]; then                   # tenths of a day
+      t=$(( (rem7 + 4320) / 8640 )); tv="$(( t / 10 )).$(( t % 10 ))d"
+    elif [ "$rem7" -ge 5400 ]; then
+      t=$(( (rem7 + 180) / 360 ))
+      if [ "$t" -ge 100 ]; then tv="$(( (rem7 + 1800) / 3600 ))h"   # keeps four chars
+      else tv="$(( t / 10 )).$(( t % 10 ))h"; fi
+    else
+      tv="$(( (rem7 + 30) / 60 ))m"
+    fi
+    seg7="${seg7} ${WC}⟳ $(pad 4 "$tv")${R}"
+  fi
+  wk0="${sep}${seg7}"
+  [ "$lim7" -ge "${CC_RED:-80}" ] && wk1=$wk0
+fi
+wk=$wk0
+
 # git branch — task-35: parsed from the repository's HEAD file; spawning git put
 # its name into terminal title bars on every render. Walk up from cwd to .git,
 # follow a "gitdir:" pointer file (worktree, submodule), then read HEAD: a
@@ -505,15 +533,22 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # superseded — tiers=("ctx0 tok0 br0" "ctx1 tok0 br0" "ctx2 tok0 br0" "ctx3 tok0 br0" \
   # superseded —        "ctx3 tok1 br0" "ctx3 tok2 br0" "ctx3 tok2 br1" "ctx4 tok2 br1")
   # A non-urgent reset tail drops right after the bar.
-  tiers=("ctx0 tok0 br0 rs0" "ctx1 tok0 br0 rs0" "ctx2 tok0 br0 rs0" "ctx3 tok0 br0 rs0" \
-         "ctx3 tok0 br0 rs1" "ctx3 tok1 br0 rs1" "ctx3 tok2 br0 rs1" "ctx3 tok2 br1 rs1" \
-         "ctx4 tok2 br1 rs1")
+  # superseded — tiers=("ctx0 tok0 br0 rs0" "ctx1 tok0 br0 rs0" "ctx2 tok0 br0 rs0" "ctx3 tok0 br0 rs0" \
+  # superseded —        "ctx3 tok0 br0 rs1" "ctx3 tok1 br0 rs1" "ctx3 tok2 br0 rs1" "ctx3 tok2 br1 rs1" \
+  # superseded —        "ctx4 tok2 br1 rs1")
+  # A non-urgent weekly segment drops next.
+  tiers=("ctx0 tok0 br0 rs0 wk0" "ctx1 tok0 br0 rs0 wk0" "ctx2 tok0 br0 rs0 wk0" \
+         "ctx3 tok0 br0 rs0 wk0" "ctx3 tok0 br0 rs1 wk0" "ctx3 tok0 br0 rs1 wk1" \
+         "ctx3 tok1 br0 rs1 wk1" "ctx3 tok2 br0 rs1 wk1" "ctx3 tok2 br1 rs1 wk1" \
+         "ctx4 tok2 br1 rs1 wk1")
   cands=()
   for trio in "${tiers[@]}"; do
     # superseded — read -r cn tn bn <<< "$trio"
     # superseded — cands+=("${head}${!cn}${rest}${!bn}${!tn}${tailseg}")
-    read -r cn tn bn rn <<< "$trio"
-    cands+=("${head}${!cn}${!rn}${!bn}${!tn}${tailseg}")
+    # superseded — read -r cn tn bn rn <<< "$trio"
+    # superseded — cands+=("${head}${!cn}${!rn}${!bn}${!tn}${tailseg}")
+    read -r cn tn bn rn kn <<< "$trio"
+    cands+=("${head}${!cn}${!rn}${!kn}${!bn}${!tn}${tailseg}")
   done
   sel=$(( ${#tiers[@]} - 1 ))               # none fits -> the narrowest tier, as before
   i=0
@@ -523,14 +558,17 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   done < <(printf '%s\n' "${cands[@]}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
   # superseded — read -r cn tn bn <<< "${tiers[$sel]}"
   # superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}
-  read -r cn tn bn rn <<< "${tiers[$sel]}"
-  ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}
+  # superseded — read -r cn tn bn rn <<< "${tiers[$sel]}"
+  # superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}
+  read -r cn tn bn rn kn <<< "${tiers[$sel]}"
+  ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}
 fi
 # task-37: the token tiers render after rest (5h) and the branch instead of
 # between the context segment and rest; the collapse ladder still drops them first.
 # task-37: superseded — out="${head}${ctx}${tok}${rest}"
 # task-39: superseded — out="${head}${ctx}${rest}${tok}${tailseg}"
-out="${head}${ctx}${rest}${brseg}${tok}${tailseg}"
+# superseded — out="${head}${ctx}${rest}${brseg}${tok}${tailseg}"
+out="${head}${ctx}${rest}${wk}${brseg}${tok}${tailseg}"
 
 printf '%s' "$out"
 

@@ -1,8 +1,8 @@
 # Claude Code status bar
 
 A custom terminal status line for the Claude Code CLI: model, reasoning effort,
-context-window usage, 5-hour rate-limit usage, git branch, and session token
-throughput.
+context-window usage, 5-hour and weekly rate-limit usage, git branch, and session
+token throughput.
 
 The status line renders on every update from the session JSON Claude Code pipes
 to it on stdin. A live session looks like this:
@@ -18,11 +18,11 @@ to it on stdin. A live session looks like this:
 
 | Claude Code | Missing or wrong in earlier releases |
 |---|---|
-| 2.1.80 | 5-hour usage and reset tail (`rate_limits`) |
+| 2.1.80 | 5-hour and weekly usage (`rate_limits`) |
 | 2.1.119 | Reasoning effort (`effort.level`) |
 | 2.1.132 | Context token count: cumulative instead of current |
 | 2.1.153 | Width collapse (`COLUMNS`); the full line is always shown |
-| 2.1.243 | 5-hour usage keeps its pre-reset value after an idle reset |
+| 2.1.243 | Usage keeps its pre-reset value after an idle window reset |
 
 ## Installation
 
@@ -68,6 +68,7 @@ manually.
 | bar + `12%` | Context-window fill; green below 50, amber 50–79, red 80 and above. The bar is `CC_CELLS` cells wide and narrows under width pressure |
 | `123k/1m` | Tokens in context / context-window size. The count turns amber while the prompt cache is cold — the session has idled past the cache TTL (1h or 5m, read from the transcript), so the next request rewrites the whole context into the cache. When the bar is collapsed the count carries the fill color instead |
 | `30%` | Rolling 5-hour rate-limit usage, in the usual green/amber/red. The reset tail (`⟳ 2.4h`, `⟳  45m`) is time to the reset, shown when the line has room. At `CC_RED` usage or within `CC_RESET_SOON` minutes of the reset it is never dropped |
+| `7d  95% ⟳ 8.3h` | Rolling 7-day rate-limit usage and time to its reset (`⟳ 3.5d`, `⟳  15h`, `⟳ 8.3h`, `⟳  45m`). Shown from `CC_AMBER` usage; at `CC_RED` it is never dropped |
 | `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`, shortened to `CC_BRANCH_MIN` under width pressure |
 | `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); hidden with `CC_TOKENS=0` |
 | `⇧ v1.6` | Shown once after a self-update, naming the new version |
@@ -80,7 +81,8 @@ shedding what the line states twice before what it states once. The context bar 
 first, since it draws the percentage printed beside it: it narrows to 5/7 and then
 3/7 of `CC_CELLS` (with the default 7, to 5 and then 3 cells, never below one) and is
 then dropped altogether, its fill color moving onto the token count. Next the reset
-tail goes, unless it is urgent (see `30%` above). After that the
+tail goes, unless it is urgent (see `30%` above), then the weekly segment below
+`CC_RED`. After that the
 session `w:` (write) figure is dropped, then `r:` (read); then the branch is shortened
 to `CC_BRANCH_MIN`; finally the percentage is dropped too. The widest form that fits
 is shown. This reads the terminal width from the `COLUMNS` variable Claude
@@ -119,7 +121,7 @@ Set these as environment variables in the `statusLine.command`, for example
 | `CC_COMPACT` | `1` | Collapse the line to fit the terminal width; set `0` to always keep the full line |
 | `CC_RESERVE` | `4` | Columns subtracted from `COLUMNS` when fitting — the padding Claude Code draws around the status line; `0` fits to the full width |
 | `CC_TOKENS` | `1` | Show the cumulative session read/write token segment; set `0` to hide it |
-| `CC_AMBER` / `CC_RED` | `50` / `80` | Amber and red percentage boundaries (context fill and 5h usage) |
+| `CC_AMBER` / `CC_RED` | `50` / `80` | Amber and red percentage boundaries (context fill, 5h and weekly usage); the weekly segment shows from `CC_AMBER` and is never dropped from `CC_RED` |
 | `CC_RESET_SOON` | `15` | Minutes to the 5h reset under which the reset tail is never dropped |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
 | `CC_BRANCH_MIN` | `10` | Branch length when the collapse ladder shortens it |

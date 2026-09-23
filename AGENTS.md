@@ -8,7 +8,8 @@ conventions, AI-usage policy — is in [CONTRIBUTING.md](CONTRIBUTING.md).
 This project is a single terminal status line for the Claude Code CLI. Claude
 Code pipes a session JSON object to a command on stdin on every update; the
 command prints one line — model, reasoning effort, context-window fill,
-5-hour rate-limit usage, git branch, and cumulative session token throughput.
+5-hour and weekly rate-limit usage, git branch, and cumulative session token
+throughput.
 The whole program is `statusline.sh`; there is no build step and no runtime
 dependency on the project itself.
 
