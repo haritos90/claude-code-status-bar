@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code status line — model · effort · context bar · 5h limit · 7d limit
-# · git branch · session tokens.
+# · model limit · git branch · session tokens.
 # All values come from the JSON on stdin. Numeric segments are right-padded to a
 # fixed width so the line does not shift as values change digit count.
 # Correct values need Claude Code 2.1.243 or newer.
@@ -26,6 +26,13 @@ input=""; IFS= read -rd '' input
 # task-25: superseded — cost=$(j '.cost.total_cost_usd // 0')
 # task-35: superseded — modelid=$(j '.model.id // ""')
 # task-35: superseded — tpath=$(j '.transcript_path // ""')
+# task-61: the last three fields are the model-scoped limit — the first
+# rate_limits key that extends a window name (<word>_(hour|day|week|month)_)
+# with an alias found word-bounded in the current model id or display name
+# (seven_day_opus once, seven_day_fable now). The key is discovered in the
+# data, never hardcoded, so a renamed or retired alias (the obsolete sonnet
+# limit) follows the CLI without a script change. No match emits three empty
+# lines, keeping the one-line-per-field contract.
 fields=$(printf '%s' "$input" | jq -r '
   (.model.display_name // .model.id // "?"),
   (.effort.level // ""),
@@ -39,16 +46,25 @@ fields=$(printf '%s' "$input" | jq -r '
   (.session_id // "default"),
   (.rate_limits.five_hour.resets_at // ""),
   (.rate_limits.seven_day.used_percentage // ""),
-  (.rate_limits.seven_day.resets_at // "")' 2>/dev/null)
+  (.rate_limits.seven_day.resets_at // ""),
+  ((((.model.id // "") + " " + (.model.display_name // "")) | ascii_downcase) as $m
+   | ((.rate_limits // {}) | to_entries
+      | map((.key | sub("^[a-z]+_(hour|day|week|month)_"; "")) as $a
+          | select($a != .key and ($m | test("\\b" + ($a | gsub("_"; "[-_ ]")) + "\\b")))
+          | {a: $a, v: .value})
+      | first // {a: "", v: {}})
+   | (.a), (.v.used_percentage // ""), (.v.resets_at // ""))' 2>/dev/null)
 { IFS= read -r model; IFS= read -r effort; IFS= read -r used
   IFS= read -r total; IFS= read -r pct;    IFS= read -r lim5
   IFS= read -r cwd;   IFS= read -r modelid; IFS= read -r tpath
   IFS= read -r sid;   IFS= read -r reset5
-  IFS= read -r lim7;  IFS= read -r reset7; } <<< "$fields"
+  IFS= read -r lim7;  IFS= read -r reset7
+  IFS= read -r aliasM; IFS= read -r limM; IFS= read -r resetM; } <<< "$fields"
 model=${model% (1M context)}
 pct=${pct%.*}
 lim5=${lim5%.*}
 lim7=${lim7%.*}
+limM=${limM%.*}
 
 R=$'\033[0m'; DIM=$'\033[38;2;120;120;120m'; BOLD=$'\033[1m'
 AMB=$'\033[38;2;240;190;70m'; GRN=$'\033[38;2;120;190;120m'   # fixed marker colors
@@ -369,29 +385,74 @@ if [ -n "$lim5" ]; then
 fi
 rest=$rs0
 
-# Weekly usage: shown from CC_AMBER, pinned from CC_RED.
-wk=""; wk0=""; wk1=""
-if [ -n "$lim7" ] && [ "$lim7" -ge "${CC_AMBER:-50}" ]; then
-  WC=$(col "$lim7")
-  seg7="${DIM}7d ${R}${WC}$(pad 4 "${lim7}%")${R}"
-  case "$reset7" in *[!0-9]*) reset7="" ;; esac
-  if [ -n "$reset7" ] && [ "$reset7" -gt "$now" ]; then
-    rem7=$(( reset7 - now ))
-    if [ "$rem7" -ge 86400 ]; then                   # tenths of a day
-      t=$(( (rem7 + 4320) / 8640 )); tv="$(( t / 10 )).$(( t % 10 ))d"
-    elif [ "$rem7" -ge 5400 ]; then
-      t=$(( (rem7 + 180) / 360 ))
-      if [ "$t" -ge 100 ]; then tv="$(( (rem7 + 1800) / 3600 ))h"   # keeps four chars
-      else tv="$(( t / 10 )).$(( t % 10 ))h"; fi
-    else
-      tv="$(( (rem7 + 30) / 60 ))m"
-    fi
-    seg7="${seg7} ${WC}⟳ $(pad 4 "$tv")${R}"
+# task-61: shared reset tail for the day-scale limit segments (weekly, model):
+# tenths of a day from 24h, tenth-hours from 90m (whole hours once tenths would
+# exceed four chars), whole minutes below; empty unless the reset lies in the
+# future. The 5h tail keeps its own inline form (no day tier, pin logic).
+mktail() {                                 # $1 = resets_at, $2 = color; sets TAIL
+  local rs=$1 c=$2 rem t tv
+  TAIL=""
+  case "$rs" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$rs" -gt "$now" ] || return 0
+  rem=$(( rs - now ))
+  if [ "$rem" -ge 86400 ]; then                      # tenths of a day
+    t=$(( (rem + 4320) / 8640 )); tv="$(( t / 10 )).$(( t % 10 ))d"
+  elif [ "$rem" -ge 5400 ]; then
+    t=$(( (rem + 180) / 360 ))
+    if [ "$t" -ge 100 ]; then tv="$(( (rem + 1800) / 3600 ))h"   # keeps four chars
+    else tv="$(( t / 10 )).$(( t % 10 ))h"; fi
+  else
+    tv="$(( (rem + 30) / 60 ))m"
   fi
+  # Space after ⟳: a fallback-font glyph covers the next cell.
+  TAIL=" ${c}⟳ $(pad 4 "$tv")${R}"
+}
+
+# Weekly usage: shown whenever present, pinned from CC_RED.
+# task-61: superseded — the segment showed only from CC_AMBER and built the
+# reset tail inline (now mktail, shared with the model-scoped segment):
+# if [ -n "$lim7" ] && [ "$lim7" -ge "${CC_AMBER:-50}" ]; then
+#   WC=$(col "$lim7")
+#   seg7="${DIM}7d ${R}${WC}$(pad 4 "${lim7}%")${R}"
+#   case "$reset7" in *[!0-9]*) reset7="" ;; esac
+#   if [ -n "$reset7" ] && [ "$reset7" -gt "$now" ]; then
+#     rem7=$(( reset7 - now ))
+#     if [ "$rem7" -ge 86400 ]; then                   # tenths of a day
+#       t=$(( (rem7 + 4320) / 8640 )); tv="$(( t / 10 )).$(( t % 10 ))d"
+#     elif [ "$rem7" -ge 5400 ]; then
+#       t=$(( (rem7 + 180) / 360 ))
+#       if [ "$t" -ge 100 ]; then tv="$(( (rem7 + 1800) / 3600 ))h"   # keeps four chars
+#       else tv="$(( t / 10 )).$(( t % 10 ))h"; fi
+#     else
+#       tv="$(( (rem7 + 30) / 60 ))m"
+#     fi
+#     seg7="${seg7} ${WC}⟳ $(pad 4 "$tv")${R}"
+#   fi
+#   wk0="${sep}${seg7}"
+#   [ "$lim7" -ge "${CC_RED:-80}" ] && wk1=$wk0
+# fi
+wk=""; wk0=""; wk1=""
+if [ -n "$lim7" ]; then
+  WC=$(col "$lim7")
+  mktail "$reset7" "$WC"
+  seg7="${DIM}7d ${R}${WC}$(pad 4 "${lim7}%")${R}${TAIL}"
   wk0="${sep}${seg7}"
   [ "$lim7" -ge "${CC_RED:-80}" ] && wk1=$wk0
 fi
 wk=$wk0
+
+# Model-scoped usage (task-61): alias and figures come from the jq pass at the
+# top. Rendered after the weekly segment with the alias as its dim label
+# (e.g. "fable  36%"); pinned from CC_RED like the weekly one.
+md=""; md0=""; md1=""
+if [ -n "$limM" ] && [ -n "$aliasM" ]; then
+  MC=$(col "$limM")
+  mktail "$resetM" "$MC"
+  segm="${DIM}${aliasM} ${R}${MC}$(pad 4 "${limM}%")${R}${TAIL}"
+  md0="${sep}${segm}"
+  [ "$limM" -ge "${CC_RED:-80}" ] && md1=$md0
+fi
+md=$md0
 
 # git branch — task-35: parsed from the repository's HEAD file; spawning git put
 # its name into terminal title bars on every render. Walk up from cwd to .git,
@@ -553,19 +614,27 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # superseded — tiers=("ctx0 tok0 br0 rs0" "ctx1 tok0 br0 rs0" "ctx2 tok0 br0 rs0" "ctx3 tok0 br0 rs0" \
   # superseded —        "ctx3 tok0 br0 rs1" "ctx3 tok1 br0 rs1" "ctx3 tok2 br0 rs1" "ctx3 tok2 br1 rs1" \
   # superseded —        "ctx4 tok2 br1 rs1")
-  # A non-urgent weekly segment drops next.
-  tiers=("ctx0 tok0 br0 rs0 wk0" "ctx1 tok0 br0 rs0 wk0" "ctx2 tok0 br0 rs0 wk0" \
-         "ctx3 tok0 br0 rs0 wk0" "ctx3 tok0 br0 rs1 wk0" "ctx3 tok0 br0 rs1 wk1" \
-         "ctx3 tok1 br0 rs1 wk1" "ctx3 tok2 br0 rs1 wk1" "ctx3 tok2 br1 rs1 wk1" \
-         "ctx4 tok2 br1 rs1 wk1")
+  # superseded — a non-urgent weekly segment dropped right after the tail:
+  # tiers=("ctx0 tok0 br0 rs0 wk0" "ctx1 tok0 br0 rs0 wk0" "ctx2 tok0 br0 rs0 wk0" \
+  #        "ctx3 tok0 br0 rs0 wk0" "ctx3 tok0 br0 rs1 wk0" "ctx3 tok0 br0 rs1 wk1" \
+  #        "ctx3 tok1 br0 rs1 wk1" "ctx3 tok2 br0 rs1 wk1" "ctx3 tok2 br1 rs1 wk1" \
+  #        "ctx4 tok2 br1 rs1 wk1")
+  # task-61: after the tail, the non-urgent model-scoped segment drops, then the
+  # non-urgent weekly segment.
+  tiers=("ctx0 tok0 br0 rs0 wk0 md0" "ctx1 tok0 br0 rs0 wk0 md0" "ctx2 tok0 br0 rs0 wk0 md0" \
+         "ctx3 tok0 br0 rs0 wk0 md0" "ctx3 tok0 br0 rs1 wk0 md0" "ctx3 tok0 br0 rs1 wk0 md1" \
+         "ctx3 tok0 br0 rs1 wk1 md1" "ctx3 tok1 br0 rs1 wk1 md1" "ctx3 tok2 br0 rs1 wk1 md1" \
+         "ctx3 tok2 br1 rs1 wk1 md1" "ctx4 tok2 br1 rs1 wk1 md1")
   cands=()
   for trio in "${tiers[@]}"; do
     # superseded — read -r cn tn bn <<< "$trio"
     # superseded — cands+=("${head}${!cn}${rest}${!bn}${!tn}${tailseg}")
     # superseded — read -r cn tn bn rn <<< "$trio"
     # superseded — cands+=("${head}${!cn}${!rn}${!bn}${!tn}${tailseg}")
-    read -r cn tn bn rn kn <<< "$trio"
-    cands+=("${head}${!cn}${!rn}${!kn}${!bn}${!tn}${tailseg}")
+    # task-61: superseded — read -r cn tn bn rn kn <<< "$trio"
+    # task-61: superseded — cands+=("${head}${!cn}${!rn}${!kn}${!bn}${!tn}${tailseg}")
+    read -r cn tn bn rn kn mn <<< "$trio"
+    cands+=("${head}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${tailseg}")
   done
   sel=$(( ${#tiers[@]} - 1 ))               # none fits -> the narrowest tier, as before
   i=0
@@ -577,15 +646,18 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}
   # superseded — read -r cn tn bn rn <<< "${tiers[$sel]}"
   # superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}
-  read -r cn tn bn rn kn <<< "${tiers[$sel]}"
-  ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}
+  # task-61: superseded — read -r cn tn bn rn kn <<< "${tiers[$sel]}"
+  # task-61: superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}
+  read -r cn tn bn rn kn mn <<< "${tiers[$sel]}"
+  ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}; md=${!mn}
 fi
 # task-37: the token tiers render after rest (5h) and the branch instead of
 # between the context segment and rest; the collapse ladder still drops them first.
 # task-37: superseded — out="${head}${ctx}${tok}${rest}"
 # task-39: superseded — out="${head}${ctx}${rest}${tok}${tailseg}"
 # superseded — out="${head}${ctx}${rest}${brseg}${tok}${tailseg}"
-out="${head}${ctx}${rest}${wk}${brseg}${tok}${tailseg}"
+# task-61: superseded — out="${head}${ctx}${rest}${wk}${brseg}${tok}${tailseg}"
+out="${head}${ctx}${rest}${wk}${md}${brseg}${tok}${tailseg}"
 
 printf '%s' "$out"
 
