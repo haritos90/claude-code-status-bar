@@ -2,12 +2,12 @@
 
 A custom terminal status line for the Claude Code CLI: model, reasoning effort,
 context-window usage, 5-hour, weekly, and model-scoped rate-limit usage, git
-branch, and session token throughput.
+branch, and optional session token throughput.
 
 The status line renders on every update from the session JSON Claude Code pipes
 to it on stdin. A live session looks like this:
 
-    Opus 4.8 max · █░░░░░░  12% · 123k/1m ·  30% ⟳ 2.4h · ⎇ main · r:2.4m w: 16k
+    Opus 4.8 max · █░░░░░░  12% · 123k/1m ·  30% ⟳ 2.4h · ⎇ main
 
 ## Requirements
 
@@ -71,7 +71,7 @@ manually.
 | `7d  95% ⟳ 8.3h` | Rolling 7-day rate-limit usage and time to its reset (`⟳ 3.5d`, `⟳  15h`, `⟳ 8.3h`, `⟳  45m`). Shown whenever the data is present; at `CC_RED` it is never dropped |
 | `fable  36% ⟳ 4.6d` | Model-scoped rate-limit usage, present when `rate_limits` carries a window key extended with an alias matching the current model (`seven_day_opus`, `seven_day_fable`). The alias is read from the data, not from a model list, so it follows whatever limits the CLI reports. At `CC_RED` it is never dropped |
 | `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`, shortened to `CC_BRANCH_MIN` under width pressure |
-| `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); hidden with `CC_TOKENS=0` |
+| `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); shown only with `CC_TOKENS=1` |
 | `⇧ v1.7` | Shown once after a self-update, naming the new version |
 
 Numeric segments, the reset tail included, are right-padded to a fixed width, so
@@ -122,7 +122,7 @@ Set these as environment variables in the `statusLine.command`, for example
 | `CC_CELLS` | `7` | Context bar width in cells at the widest tier; the collapse ladder narrows it to 5/7 and 3/7 of this before dropping it |
 | `CC_COMPACT` | `1` | Collapse the line to fit the terminal width; set `0` to always keep the full line |
 | `CC_RESERVE` | `4` | Columns subtracted from `COLUMNS` when fitting — the padding Claude Code draws around the status line; `0` fits to the full width |
-| `CC_TOKENS` | `1` | Show the cumulative session read/write token segment; set `0` to hide it |
+| `CC_TOKENS` | `0` | Show the cumulative session read/write token segment; set `1` to enable it |
 | `CC_AMBER` / `CC_RED` | `50` / `80` | Color gradient anchors (context fill, 5h, weekly, and model-scoped usage): warming starts at `CC_AMBER`, orange around `CC_RED`. At `CC_RED` the reset tail, the weekly segment, and the model-scoped segment are never dropped |
 | `CC_RESET_SOON` | `15` | Minutes to the 5h reset under which the reset tail is never dropped |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |

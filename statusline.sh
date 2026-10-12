@@ -232,7 +232,7 @@ self_update() { # detached background; silent; never surfaces failures
 
 # --- transcript pass: token throughput (task-32) + fallback target ----------
 # Cumulative read/write across the transcript: read = Σ(input + cache_read +
-# cache_creation), write = Σ output. Shown by default; CC_TOKENS=0 opts out.
+# cache_creation), write = Σ output. Hidden by default; CC_TOKENS=1 opts in.
 # task-35: one memoized pass serves both features. The totals and the newest
 # fallback target are keyed on the transcript's size+mtime in
 # CACHE_DIR/tokens-<sid> (fields: sz mt rd wr fbto), so idle re-renders spawn no
@@ -284,7 +284,8 @@ if [ -n "$tpath" ] && [ -f "$tpath" ]; then
   fi
   # superseded — [ -n "$fbto" ] && [ "$fbto" = "$modelid" ] && fbmark=" $(col 50)⤵${R}"
   [ -n "$fbto" ] && [ "$fbto" = "$modelid" ] && fbmark=" ${AMB}⤵${R}"
-  if [ "${CC_TOKENS:-1}" != "0" ] && { [ "$rd" -gt 0 ] || [ "$wr" -gt 0 ]; }; then
+  # superseded — if [ "${CC_TOKENS:-1}" != "0" ] && { [ "$rd" -gt 0 ] || [ "$wr" -gt 0 ]; }; then
+  if [ "${CC_TOKENS:-0}" = "1" ] && { [ "$rd" -gt 0 ] || [ "$wr" -gt 0 ]; }; then
     tok0="${sep}${DIM}r:${R}$(pad 4 "$(fmt "$rd")") ${DIM}w:${R}$(pad 4 "$(fmt "$wr")")"
     tok1="${sep}${DIM}r:${R}$(pad 4 "$(fmt "$rd")")"
   fi
@@ -582,8 +583,8 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # renders the percentage printed beside it — task-50 narrows it through CELLS1 and
   # CELLS2 before removing it — then write, then read, then the branch
   # shortens to CC_BRANCH_MIN, and the percentage goes last — the cumulative token
-  # figures appear nowhere else in the interface, so they outrank the bar. With
-  # CC_TOKENS=0 the tok tiers are empty and the walk degenerates accordingly.
+  # figures appear nowhere else in the interface, so they outrank the bar. Unless
+  # CC_TOKENS=1 the tok tiers are empty and the walk degenerates accordingly.
   # Indirect ${!name} expands the tier variables named in each trio.
   # task-48: measuring inside the walk spawned one awk per candidate — up to six per
   # render on a narrow terminal, on top of the jq and stat spawns. Terminal title bars
