@@ -126,6 +126,11 @@ then goes entirely, and the token count takes the fill color:
 
     Opus 4.8 max ·  12% · 123k/1m ·  30% · ⎇ main
 
+The outputs assume Remote Control is not attached. Run from inside a Claude Code
+session that has it, the command inherits `CLAUDE_CODE_BRIDGE_SESSION_ID` and each
+line ends in `· rc`; replace `bash statusline.sh` with
+`env -u CLAUDE_CODE_BRIDGE_SESSION_ID bash statusline.sh` to reproduce them exactly.
+
 ## Configuration
 
 Set these as environment variables in the `statusLine.command`, for example
