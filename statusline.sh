@@ -544,7 +544,10 @@ md=$md0
 # task-35: superseded — sha=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
 # task-35: superseded — [ -n "$sha" ] && br="(${sha})"
 # superseded — br0=""; br1=""
-br0=""; br1=""; br2=""               # br2: dropped
+# superseded — br0=""; br1=""; br2=""               # br2: dropped
+# brf: flex tier, measured without the branch, which then
+# takes the room left, down to brfloor columns.
+br0=""; br1=""; br2=""; brf=""; brfloor=0
 if [ -n "$cwd" ]; then
   br=""; gd=""; d=$cwd
   while :; do
@@ -572,13 +575,16 @@ if [ -n "$cwd" ]; then
   # task-39: superseded — rest="${rest}${sep}${DIM}⎇ ${br}${R}"
   if [ -n "$br" ]; then
     BRMAX=${CC_BRANCH_MAX:-18}
-    BRMIN=${CC_BRANCH_MIN:-10}
+    # superseded — BRMIN=${CC_BRANCH_MIN:-10}
+    BRMIN=${CC_BRANCH_MIN:-1}                 # fewest letters kept
+    case "$BRMIN" in ''|*[!0-9]*|0) BRMIN=1 ;; esac
     b=$br
     [ "${#b}" -gt "$BRMAX" ] && b="${b:0:$((BRMAX-1))}…"
     br0="${sep}${DIM}⎇ ${b}${R}"
-    b=$br
-    [ "${#b}" -gt "$BRMIN" ] && b="${b:0:$((BRMIN-1))}…"
-    br1="${sep}${DIM}⎇ ${b}${R}"
+    # superseded — b=$br
+    # superseded — [ "${#b}" -gt "$BRMIN" ] && b="${b:0:$((BRMIN-1))}…"
+    # superseded — br1="${sep}${DIM}⎇ ${b}${R}"
+    brfloor=$(( BRMIN + 1 )); [ "${#br}" -le "$BRMIN" ] && brfloor=${#br}
   fi
 fi
 
@@ -736,10 +742,11 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   tiers=("ctx0 tok0 br0 rs0 wk0 md0 hd0" "ctx1 tok0 br0 rs0 wk0 md0 hd0" "ctx2 tok0 br0 rs0 wk0 md0 hd0" \
          "ctx3 tok0 br0 rs0 wk0 md0 hd0" "ctx3 tok0 br0 rs0 wk0 md0 hd1" "ctx3 tok0 br0 rs1 wk0 md0 hd1" \
          "ctx3 tok0 br0 rs1 wk0 md1 hd1" "ctx3 tok0 br0 rs1 wk1 md1 hd1" "ctx3 tok1 br0 rs1 wk1 md1 hd1" \
-         "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx5 tok2 br0 rs1 wk1 md1 hd1" "ctx5 tok2 br1 rs1 wk1 md1 hd1" \
+         "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx5 tok2 brf rs1 wk1 md1 hd1" \
          "ctx5 tok2 br2 rs1 wk1 md1 hd1" "ctx5 tok2 br2 rs2 wk1 md1 hd1" "ctx5 tok2 br2 rs2 wk1 md2 hd1" \
          "ctx5 tok2 br2 rs2 wk2 md2 hd1" "ctx5 tok2 br2 rs2 wk2 md3 hd1" "ctx5 tok2 br2 rs2 wk3 md3 hd1" \
          "ctx5 tok2 br2 rs2 wk3 md4 hd1" "ctx5 tok2 br2 rs2 wk4 md4 hd1")
+  # superseded — "ctx5 tok2 br0 ..." then "ctx5 tok2 br1 ..." (fixed 10-letter step)
   cands=()
   for trio in "${tiers[@]}"; do
     # superseded — read -r cn tn bn <<< "$trio"
@@ -755,9 +762,16 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
     cands+=("${!hn}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${rcseg}${tailseg}")
   done
   sel=$(( ${#tiers[@]} - 1 ))               # none fits -> the narrowest tier, as before
-  i=0
+  i=0; brroom=0
   while IFS= read -r vis; do
-    [ "$vis" -le "$budget" ] && { sel=$i; break; }
+    # superseded — [ "$vis" -le "$budget" ] && { sel=$i; break; }
+    case " ${tiers[$i]} " in
+      *" brf "*)                              # " · ⎇ " takes 5 columns
+        brroom=$(( budget - vis - 5 ))
+        if [ -n "$br" ]; then [ "$brroom" -ge "$brfloor" ] && { sel=$i; break; }
+        else [ "$vis" -le "$budget" ] && { sel=$i; break; }; fi ;;
+      *) [ "$vis" -le "$budget" ] && { sel=$i; break; } ;;
+    esac
     i=$((i+1))
   done < <(printf '%s\n' "${cands[@]}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
   # superseded — read -r cn tn bn <<< "${tiers[$sel]}"
@@ -770,6 +784,11 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}; md=${!mn}
   read -r cn tn bn rn kn mn hn <<< "${tiers[$sel]}"
   ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}; md=${!mn}; head=${!hn}
+  if [ "$bn" = brf ] && [ -n "$br" ]; then  # one letter at a time
+    b=$br; n=$brroom; [ "$n" -gt "$BRMAX" ] && n=$BRMAX
+    [ "${#b}" -gt "$n" ] && b="${b:0:$((n-1))}…"
+    brseg="${sep}${DIM}⎇ ${b}${R}"
+  fi
 fi
 # task-37: the token tiers render after rest (5h) and the branch instead of
 # between the context segment and rest; the collapse ladder still drops them first.

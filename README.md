@@ -70,7 +70,7 @@ manually.
 | `30%` | Rolling 5-hour rate-limit usage, on the same gradient. The reset tail (`⟳ 2.4h`, `⟳  45m`) is time to the reset, shown when the line has room. At `CC_RED` usage or within `CC_RESET_SOON` minutes of the reset it is urgent and outlasts everything but the percentages |
 | `7d  95% ⟳ 8.3h` | Rolling 7-day rate-limit usage and time to its reset (`⟳ 3.5d`, `⟳  15h`, `⟳ 8.3h`, `⟳  45m`). Shown whenever the data is present. Under width pressure the tail goes first and the percentage stays until only percentages are left to drop; at `CC_RED` both are kept longer |
 | `fable  36% ⟳ 4.6d` | Model-scoped weekly usage, such as the Fable limit, shown whatever the current model. Claude Code does not pass it on stdin, so it is read from the usage snapshot Claude Code stores in `~/.claude.json` (under `CLAUDE_CONFIG_DIR` when set) whenever it fetches usage, for example on `/usage`. A snapshot older than an hour renders dim; one whose weekly window has since reset is not shown. With several model limits, the current model's is preferred. A `rate_limits` key on stdin extending a window name with the current model's alias (`seven_day_fable`) takes precedence over the snapshot. Labels come from the data, not from a model list. Collapses like the weekly segment: tail first, percentage late, both kept longer at `CC_RED` |
-| `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`, shortened to `CC_BRANCH_MIN` under width pressure |
+| `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`. Under width pressure it shortens one letter at a time down to its first `CC_BRANCH_MIN` letters (`⎇ m…`), then is dropped |
 | `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); shown only with `CC_TOKENS=1` |
 | `rc` | Remote Control is attached to the session (Claude Code sets `CLAUDE_CODE_BRIDGE_SESSION_ID`). Drawn in the green of Claude Code's `/rc` indicator: 256-color inside tmux, where Claude Code itself renders in 256 colors, truecolor elsewhere. Never dropped by the collapse |
 | `⇧ v1.7` | Shown once after a self-update, naming the new version |
@@ -86,11 +86,11 @@ then dropped altogether, its fill color moving onto the token count. Next the
 reasoning effort shortens to its first two letters. Every percentage then outlasts
 everything else: the reset tails go first (5-hour, model-scoped, weekly; urgent ones
 are kept), then the session `w:` (write) and `r:` (read) figures, then the context
-token count, leaving its percentage. Then the branch is shortened to
-`CC_BRANCH_MIN` and dropped, and the urgent reset tails go. Only then do
-percentages drop: the model-scoped and the weekly one, below `CC_RED` first. The
-narrowest form, `Opus 5.5 xh ·  12% ·  30% · rc`, fits a 34-column terminal. The
-widest form that fits is shown.
+token count, leaving its percentage. Then the branch shortens one letter at a time
+to its first `CC_BRANCH_MIN` letters and is dropped, and the urgent reset tails go.
+Only then do percentages drop: the model-scoped and the weekly one, below `CC_RED`
+first. The narrowest form, `Opus 5.5 xh ·  12% ·  30% · rc`, fits a 34-column
+terminal. The widest form that fits is shown.
 
 The terminal width comes from the `COLUMNS` variable Claude Code exports
 (2.1.153+); the line is fitted into `COLUMNS` minus a `CC_RESERVE` reserve
@@ -133,5 +133,5 @@ Set these as environment variables in the `statusLine.command`, for example
 | `CC_AMBER` / `CC_RED` | `50` / `80` | Color gradient anchors (context fill, 5h, weekly, and model-scoped usage): warming starts at `CC_AMBER`, orange around `CC_RED`. At `CC_RED` the reset tails and the weekly and model-scoped percentages are kept longer under width pressure |
 | `CC_RESET_SOON` | `15` | Minutes to the 5h reset under which its reset tail counts as urgent and is kept longer |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
-| `CC_BRANCH_MIN` | `10` | Branch length when the collapse ladder shortens it |
+| `CC_BRANCH_MIN` | `1` | Fewest branch letters kept while the collapse ladder shortens it; with less room the branch is dropped |
 | `CC_AUTO_UPDATE` | `0` | Self-update from GitHub releases; set `1` to enable |
