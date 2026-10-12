@@ -332,6 +332,7 @@ hd0=$head
 # (ctx0), at CELLS1 (ctx1) and at CELLS2 (ctx2) — all three with the dim count — then
 # the bar-less pct tier (ctx3) and the count alone (ctx4). The formatted pieces are
 # built once and shared, so the two added tiers cost no further command substitutions.
+# Now the count goes before the percent: ctx5, not ctx4.
 # task-43: while the prompt cache is cold — the session idled past the cache TTL
 # from the transcript pass (0 = unknown, defaults to 3600 s) — the used count
 # renders amber in every tier: those tokens will be rewritten into the cache by
@@ -358,8 +359,8 @@ ctx0="${sep}${bar} ${pctseg}${sep}${cntdim}"
 ctx1="${sep}${bar1} ${pctseg}${sep}${cntdim}"
 ctx2="${sep}${bar2} ${pctseg}${sep}${cntdim}"
 ctx3="${sep}${pctseg}${sep}${cntlit}"
-ctx4="${sep}${cntlit}"
-ctx5="${sep}${pctseg}"                     # narrowest: the bare percent
+# superseded — ctx4="${sep}${cntlit}"     (the count outlived the percent)
+ctx5="${sep}${pctseg}"                     # the bare percent
 
 # rest — the 5h segment; the ladder picks rs0 or rs1.
 # superseded — rest=""; rs0=""; rs1=""
@@ -462,13 +463,19 @@ mktail() {                                 # $1 = resets_at, $2 = color; sets TA
 #   [ "$lim7" -ge "${CC_RED:-80}" ] && wk1=$wk0
 # fi
 # superseded — wk=""; wk0=""; wk1=""
-wk=""; wk0=""; wk1=""; wk2=""        # wk2: dropped, even urgent
+# superseded — wk=""; wk0=""; wk1=""; wk2=""        # wk2: dropped, even urgent
+# Tiers: wk1/wk2 drop the tail, wk3/wk4 the figure;
+# wk1 and wk3 keep an urgent (CC_RED) one.
+wk=""; wk0=""; wk1=""; wk2=""; wk3=""; wk4=""
 if [ -n "$lim7" ]; then
   WC=$(col "$lim7")
   mktail "$reset7" "$WC"
-  seg7="${DIM}7d ${R}${WC}$(pad 4 "${lim7}%")${R}${TAIL}"
-  wk0="${sep}${seg7}"
-  [ "$lim7" -ge "${CC_RED:-80}" ] && wk1=$wk0
+  # superseded — seg7="${DIM}7d ${R}${WC}$(pad 4 "${lim7}%")${R}${TAIL}"
+  # superseded — wk0="${sep}${seg7}"
+  # superseded — [ "$lim7" -ge "${CC_RED:-80}" ] && wk1=$wk0
+  seg7="${DIM}7d ${R}${WC}$(pad 4 "${lim7}%")${R}"
+  wk0="${sep}${seg7}${TAIL}"; wk1="${sep}${seg7}"; wk2=$wk1
+  [ "$lim7" -ge "${CC_RED:-80}" ] && { wk1=$wk0; wk3=$wk2; }
 fi
 wk=$wk0
 
@@ -511,14 +518,19 @@ fi
 # top. Rendered after the weekly segment with the alias as its dim label
 # (e.g. "fable  36%"); pinned from CC_RED like the weekly one.
 # superseded — md=""; md0=""; md1=""
-md=""; md0=""; md1=""; md2=""        # md2: dropped, even urgent
+# superseded — md=""; md0=""; md1=""; md2=""        # md2: dropped, even urgent
+# Tiers as for the weekly segment (md1..md4).
+md=""; md0=""; md1=""; md2=""; md3=""; md4=""
 if [ -n "$limM" ] && [ -n "$aliasM" ]; then
   # superseded — MC=$(col "$limM")
   MC=$(col "$limM"); [ "$staleM" = 1 ] && MC=$DIM
   mktail "$resetM" "$MC"
-  segm="${DIM}${aliasM} ${R}${MC}$(pad 4 "${limM}%")${R}${TAIL}"
-  md0="${sep}${segm}"
-  [ "$limM" -ge "${CC_RED:-80}" ] && md1=$md0
+  # superseded — segm="${DIM}${aliasM} ${R}${MC}$(pad 4 "${limM}%")${R}${TAIL}"
+  # superseded — md0="${sep}${segm}"
+  # superseded — [ "$limM" -ge "${CC_RED:-80}" ] && md1=$md0
+  segm="${DIM}${aliasM} ${R}${MC}$(pad 4 "${limM}%")${R}"
+  md0="${sep}${segm}${TAIL}"; md1="${sep}${segm}"; md2=$md1
+  [ "$limM" -ge "${CC_RED:-80}" ] && { md1=$md0; md3=$md2; }
 fi
 md=$md0
 
@@ -711,14 +723,23 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # superseded —        "ctx3 tok0 br0 rs0 wk0 md0 hd0" "ctx3 tok0 br0 rs0 wk0 md0 hd1" "ctx3 tok0 br0 rs1 wk0 md0 hd1" \
   # superseded —        "ctx3 tok0 br0 rs1 wk0 md1 hd1" "ctx3 tok0 br0 rs1 wk1 md1 hd1" "ctx3 tok1 br0 rs1 wk1 md1 hd1" \
   # superseded —        "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx3 tok2 br1 rs1 wk1 md1 hd1" "ctx4 tok2 br1 rs1 wk1 md1 hd1")
-  # Phone widths: the branch goes, the context becomes the bare
-  # percent, then urgent pins drop (5h tail, model, weekly).
+  # superseded — phone widths: the branch went, the context became the bare
+  # superseded — percent, then urgent pins dropped (5h tail, model, weekly):
+  # tiers=("ctx0 tok0 br0 rs0 wk0 md0 hd0" "ctx1 tok0 br0 rs0 wk0 md0 hd0" "ctx2 tok0 br0 rs0 wk0 md0 hd0" \
+  #        "ctx3 tok0 br0 rs0 wk0 md0 hd0" "ctx3 tok0 br0 rs0 wk0 md0 hd1" "ctx3 tok0 br0 rs1 wk0 md0 hd1" \
+  #        "ctx3 tok0 br0 rs1 wk0 md1 hd1" "ctx3 tok0 br0 rs1 wk1 md1 hd1" "ctx3 tok1 br0 rs1 wk1 md1 hd1" \
+  #        "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx3 tok2 br1 rs1 wk1 md1 hd1" "ctx4 tok2 br1 rs1 wk1 md1 hd1" \
+  #        "ctx4 tok2 br2 rs1 wk1 md1 hd1" "ctx5 tok2 br2 rs1 wk1 md1 hd1" "ctx5 tok2 br2 rs2 wk1 md1 hd1" \
+  #        "ctx5 tok2 br2 rs2 wk1 md2 hd1" "ctx5 tok2 br2 rs2 wk2 md2 hd1")
+  # Percentages go last: tails (5h, model, weekly), tokens, the
+  # context count, the branch, urgent tails, then the figures.
   tiers=("ctx0 tok0 br0 rs0 wk0 md0 hd0" "ctx1 tok0 br0 rs0 wk0 md0 hd0" "ctx2 tok0 br0 rs0 wk0 md0 hd0" \
          "ctx3 tok0 br0 rs0 wk0 md0 hd0" "ctx3 tok0 br0 rs0 wk0 md0 hd1" "ctx3 tok0 br0 rs1 wk0 md0 hd1" \
          "ctx3 tok0 br0 rs1 wk0 md1 hd1" "ctx3 tok0 br0 rs1 wk1 md1 hd1" "ctx3 tok1 br0 rs1 wk1 md1 hd1" \
-         "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx3 tok2 br1 rs1 wk1 md1 hd1" "ctx4 tok2 br1 rs1 wk1 md1 hd1" \
-         "ctx4 tok2 br2 rs1 wk1 md1 hd1" "ctx5 tok2 br2 rs1 wk1 md1 hd1" "ctx5 tok2 br2 rs2 wk1 md1 hd1" \
-         "ctx5 tok2 br2 rs2 wk1 md2 hd1" "ctx5 tok2 br2 rs2 wk2 md2 hd1")
+         "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx5 tok2 br0 rs1 wk1 md1 hd1" "ctx5 tok2 br1 rs1 wk1 md1 hd1" \
+         "ctx5 tok2 br2 rs1 wk1 md1 hd1" "ctx5 tok2 br2 rs2 wk1 md1 hd1" "ctx5 tok2 br2 rs2 wk1 md2 hd1" \
+         "ctx5 tok2 br2 rs2 wk2 md2 hd1" "ctx5 tok2 br2 rs2 wk2 md3 hd1" "ctx5 tok2 br2 rs2 wk3 md3 hd1" \
+         "ctx5 tok2 br2 rs2 wk3 md4 hd1" "ctx5 tok2 br2 rs2 wk4 md4 hd1")
   cands=()
   for trio in "${tiers[@]}"; do
     # superseded — read -r cn tn bn <<< "$trio"
