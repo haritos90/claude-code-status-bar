@@ -86,14 +86,21 @@ then dropped altogether, its fill color moving onto the token count. Next the
 reasoning effort shortens to its first two letters. Then the reset tail goes, unless
 it is urgent (see `30%` above), then the model-scoped segment and then the weekly
 segment, each below `CC_RED`. After that the session `w:` (write) figure is
-dropped, then `r:` (read); then the branch is shortened to `CC_BRANCH_MIN`; finally
-the percentage is dropped too. The widest form that fits is shown. This reads the
-terminal width from the `COLUMNS` variable Claude Code exports (2.1.153+) and fits
-the line into `COLUMNS` minus a `CC_RESERVE`
-reserve (default 4): Claude Code draws the status line inside a padded box narrower
-than the terminal, so a line reaching the box edge would be cut with an ellipsis
-instead of collapsing. When `COLUMNS` is absent, or with `CC_COMPACT=0`, the full
-line is always shown.
+dropped, then `r:` (read); then the branch is shortened to `CC_BRANCH_MIN`, and the
+percentage is dropped. Narrower still, as on a phone, the branch is dropped, the
+context shrinks to the bare percentage, and the urgent extras go last: the 5-hour
+reset tail, then the model-scoped and the weekly segments even at `CC_RED`. The
+narrowest form, `Opus 5.5 xh ·  12% ·  30% · rc`, fits a 34-column terminal. The
+widest form that fits is shown.
+
+The terminal width comes from the `COLUMNS` variable Claude Code exports
+(2.1.153+); the line is fitted into `COLUMNS` minus a `CC_RESERVE` reserve
+(default 4), because Claude Code draws the status line inside a box padded by two
+columns on each side and cuts a wider line with an ellipsis. Claude Code does not
+rerun the command when the terminal is resized, for example when a tmux window
+follows a client attaching from another device; a `refreshInterval` in the
+`statusLine` setting refits the line within that many seconds. When `COLUMNS` is
+absent, or with `CC_COMPACT=0`, the full line is always shown.
 
 Exercise it without a live session (from a checkout of this repository):
 

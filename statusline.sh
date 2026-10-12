@@ -359,9 +359,11 @@ ctx1="${sep}${bar1} ${pctseg}${sep}${cntdim}"
 ctx2="${sep}${bar2} ${pctseg}${sep}${cntdim}"
 ctx3="${sep}${pctseg}${sep}${cntlit}"
 ctx4="${sep}${cntlit}"
+ctx5="${sep}${pctseg}"                     # narrowest: the bare percent
 
 # rest — the 5h segment; the ladder picks rs0 or rs1.
-rest=""; rs0=""; rs1=""
+# superseded — rest=""; rs0=""; rs1=""
+rest=""; rs0=""; rs1=""; rs2=""      # rs2: no tail, even urgent
 # 5-hour rate-limit usage — task-38: bare colored percent, the dim "5h" label is
 # dropped. A reset tail (⟳ 2.4h / ⟳ 45m, in the percent's color) appears only when
 # the figure is actionable: usage at or above CC_RED, or the reset within
@@ -409,6 +411,7 @@ if [ -n "$lim5" ]; then
   fi
   rs0="${sep}${seg5}${tail5}"
   rs1="${sep}${seg5}"; [ "$pin5" = 1 ] && rs1=$rs0
+  rs2="${sep}${seg5}"
 fi
 rest=$rs0
 
@@ -458,7 +461,8 @@ mktail() {                                 # $1 = resets_at, $2 = color; sets TA
 #   wk0="${sep}${seg7}"
 #   [ "$lim7" -ge "${CC_RED:-80}" ] && wk1=$wk0
 # fi
-wk=""; wk0=""; wk1=""
+# superseded — wk=""; wk0=""; wk1=""
+wk=""; wk0=""; wk1=""; wk2=""        # wk2: dropped, even urgent
 if [ -n "$lim7" ]; then
   WC=$(col "$lim7")
   mktail "$reset7" "$WC"
@@ -506,7 +510,8 @@ fi
 # Model-scoped usage (task-61): alias and figures come from the jq pass at the
 # top. Rendered after the weekly segment with the alias as its dim label
 # (e.g. "fable  36%"); pinned from CC_RED like the weekly one.
-md=""; md0=""; md1=""
+# superseded — md=""; md0=""; md1=""
+md=""; md0=""; md1=""; md2=""        # md2: dropped, even urgent
 if [ -n "$limM" ] && [ -n "$aliasM" ]; then
   # superseded — MC=$(col "$limM")
   MC=$(col "$limM"); [ "$staleM" = 1 ] && MC=$DIM
@@ -526,7 +531,8 @@ md=$md0
 # task-35: superseded — br=$(git -C "$cwd" symbolic-ref --quiet --short HEAD 2>/dev/null)
 # task-35: superseded — sha=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
 # task-35: superseded — [ -n "$sha" ] && br="(${sha})"
-br0=""; br1=""
+# superseded — br0=""; br1=""
+br0=""; br1=""; br2=""               # br2: dropped
 if [ -n "$cwd" ]; then
   br=""; gd=""; d=$cwd
   while :; do
@@ -701,10 +707,18 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # superseded —        "ctx3 tok0 br0 rs1 wk1 md1" "ctx3 tok1 br0 rs1 wk1 md1" "ctx3 tok2 br0 rs1 wk1 md1" \
   # superseded —        "ctx3 tok2 br1 rs1 wk1 md1" "ctx4 tok2 br1 rs1 wk1 md1")
   # The effort shortens (hd1) once the bar is gone.
+  # superseded — tiers=("ctx0 tok0 br0 rs0 wk0 md0 hd0" "ctx1 tok0 br0 rs0 wk0 md0 hd0" "ctx2 tok0 br0 rs0 wk0 md0 hd0" \
+  # superseded —        "ctx3 tok0 br0 rs0 wk0 md0 hd0" "ctx3 tok0 br0 rs0 wk0 md0 hd1" "ctx3 tok0 br0 rs1 wk0 md0 hd1" \
+  # superseded —        "ctx3 tok0 br0 rs1 wk0 md1 hd1" "ctx3 tok0 br0 rs1 wk1 md1 hd1" "ctx3 tok1 br0 rs1 wk1 md1 hd1" \
+  # superseded —        "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx3 tok2 br1 rs1 wk1 md1 hd1" "ctx4 tok2 br1 rs1 wk1 md1 hd1")
+  # Phone widths: the branch goes, the context becomes the bare
+  # percent, then urgent pins drop (5h tail, model, weekly).
   tiers=("ctx0 tok0 br0 rs0 wk0 md0 hd0" "ctx1 tok0 br0 rs0 wk0 md0 hd0" "ctx2 tok0 br0 rs0 wk0 md0 hd0" \
          "ctx3 tok0 br0 rs0 wk0 md0 hd0" "ctx3 tok0 br0 rs0 wk0 md0 hd1" "ctx3 tok0 br0 rs1 wk0 md0 hd1" \
          "ctx3 tok0 br0 rs1 wk0 md1 hd1" "ctx3 tok0 br0 rs1 wk1 md1 hd1" "ctx3 tok1 br0 rs1 wk1 md1 hd1" \
-         "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx3 tok2 br1 rs1 wk1 md1 hd1" "ctx4 tok2 br1 rs1 wk1 md1 hd1")
+         "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx3 tok2 br1 rs1 wk1 md1 hd1" "ctx4 tok2 br1 rs1 wk1 md1 hd1" \
+         "ctx4 tok2 br2 rs1 wk1 md1 hd1" "ctx5 tok2 br2 rs1 wk1 md1 hd1" "ctx5 tok2 br2 rs2 wk1 md1 hd1" \
+         "ctx5 tok2 br2 rs2 wk1 md2 hd1" "ctx5 tok2 br2 rs2 wk2 md2 hd1")
   cands=()
   for trio in "${tiers[@]}"; do
     # superseded — read -r cn tn bn <<< "$trio"
