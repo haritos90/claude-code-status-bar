@@ -242,15 +242,34 @@ self_update() { # detached background; silent; never surfaces failures
 # fields; fbto reads empty and heals on the next transcript change. tok0/tok1
 # are the width tiers (full / read-only); tok2 is empty (segment dropped).
 # Hidden until a turn records usage.
+# Usage cache: Claude Code's /usage snapshot, read when stdin lacks
+# a model-scoped limit.
+cfg="${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json"
+usecfg=0; [ -z "$aliasM" ] && [ -f "$cfg" ] && usecfg=1
+# One stat serves the transcript and the usage cache.
+statf=(); szmt=""; cszmt=""
+[ -n "$tpath" ] && [ -f "$tpath" ] && statf+=("$tpath")
+[ "$usecfg" = 1 ] && statf+=("$cfg")
+if [ "${#statf[@]}" -gt 0 ]; then
+  case "$OSTYPE" in
+    darwin*|*bsd*) stout=$(stat -f '%z %m %N' "${statf[@]}" 2>/dev/null) ;;
+    *)             stout=$(stat -c '%s %Y %n' "${statf[@]}" 2>/dev/null) ;;
+  esac
+  while IFS=' ' read -r a b n; do
+    [ "$n" = "$tpath" ] && szmt="$a $b"
+    [ "$n" = "$cfg" ] && cszmt="$a $b"
+  done <<< "$stout"
+fi
 tok0=""; tok1=""; tok2=""; fbmark=""
 if [ -n "$tpath" ] && [ -f "$tpath" ]; then
   # task-35: superseded — sid=$(j '.session_id // "default"')  (single jq pass, top)
   # task-35: superseded — sz=$(stat -c %s "$tpath" 2>/dev/null || stat -f %z "$tpath" 2>/dev/null || printf 0)
   # task-35: superseded — mt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null || printf 0)
-  case "$OSTYPE" in                      # one stat; the GNU->BSD retry chain spawned four
-    darwin*|*bsd*) szmt=$(stat -f '%z %m' "$tpath" 2>/dev/null) ;;
-    *)             szmt=$(stat -c '%s %Y' "$tpath" 2>/dev/null) ;;
-  esac
+  # superseded — the transcript had its own stat (now shared, above):
+  # case "$OSTYPE" in                      # one stat; the GNU->BSD retry chain spawned four
+  #   darwin*|*bsd*) szmt=$(stat -f '%z %m' "$tpath" 2>/dev/null) ;;
+  #   *)             szmt=$(stat -c '%s %Y' "$tpath" 2>/dev/null) ;;
+  # esac
   [ -n "$szmt" ] || szmt="0 0"
   sz=${szmt% *}; mt=${szmt#* }
   # task-43: the pass also carries the newest cache TTL (field order: sz mt rd wr
@@ -442,12 +461,48 @@ if [ -n "$lim7" ]; then
 fi
 wk=$wk0
 
+# Usage-cache fallback: weekly_scoped limits from the /usage snapshot.
+# Shown for any current model; a matching one is preferred.
+# Memoized on the config's size, mtime and the model id.
+staleM=0
+if [ "$usecfg" = 1 ]; then
+  uf="$CACHE_DIR/usage"; ckey="${cszmt:-0 0} ${modelid:--}"
+  psz=""; pmt=""; pmid=""; fetchedM=0
+  [ -f "$uf" ] && IFS=' ' read -r psz pmt pmid limM resetM fetchedM aliasM < "$uf" 2>/dev/null
+  if [ -z "$cszmt" ] || [ "$psz $pmt $pmid" != "$ckey" ]; then
+    IFS=' ' read -r limM resetM fetchedM aliasM < <(jq -r --arg m "$modelid $model" '
+      (.cachedUsageUtilization // {}) as $c
+      | select(($c.accountUuid // "") == (.oauthAccount.accountUuid // ""))
+      | ($m | ascii_downcase) as $ml
+      | [ $c.utilization.limits[]?
+          | select(.kind == "weekly_scoped" and (.percent | type) == "number"
+                   and ((.scope.model.display_name // "") | length) > 0)
+          | (.scope.model.display_name | ascii_downcase) as $a
+          | { a: $a, p: (.percent | floor),
+              r: ((.resets_at // "") | try (sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z")
+                                            | fromdateiso8601 | floor) catch 0),
+              k: ($ml | test("\\b" + ($a | gsub("[^a-z0-9]+"; "[-_ ]")) + "\\b")) } ]
+      | (map(select(.k)) + .) | first // empty
+      | "\(.p) \(.r) \(($c.fetchedAtMs // 0) / 1000 | floor) \(.a)"' "$cfg" 2>/dev/null)
+    [ -n "$limM" ] || { limM="-"; resetM=0; fetchedM=0; aliasM=""; }
+    mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s %s %s\n' \
+      "$ckey" "$limM" "$resetM" "$fetchedM" "$aliasM" > "$uf" 2>/dev/null
+  fi
+  case "$limM" in ''|*[!0-9]*) limM=""; aliasM="" ;; esac
+  case "$resetM" in ''|*[!0-9]*) resetM=0 ;; esac
+  case "$fetchedM" in ''|*[!0-9]*) fetchedM=0 ;; esac
+  # A rolled-over window invalidates the snapshot.
+  [ "$resetM" -gt 0 ] && [ "$resetM" -le "$now" ] && { limM=""; aliasM=""; }
+  [ $(( now - fetchedM )) -gt 3600 ] && staleM=1      # older than 1h: dim
+fi
+
 # Model-scoped usage (task-61): alias and figures come from the jq pass at the
 # top. Rendered after the weekly segment with the alias as its dim label
 # (e.g. "fable  36%"); pinned from CC_RED like the weekly one.
 md=""; md0=""; md1=""
 if [ -n "$limM" ] && [ -n "$aliasM" ]; then
-  MC=$(col "$limM")
+  # superseded — MC=$(col "$limM")
+  MC=$(col "$limM"); [ "$staleM" = 1 ] && MC=$DIM
   mktail "$resetM" "$MC"
   segm="${DIM}${aliasM} ${R}${MC}$(pad 4 "${limM}%")${R}${TAIL}"
   md0="${sep}${segm}"
