@@ -64,7 +64,7 @@ manually.
 | Segment | Meaning |
 |---|---|
 | `Opus 4.8` | Model; the ` (1M context)` suffix is trimmed |
-| `max` | Reasoning effort; omitted when absent |
+| `max` | Reasoning effort; omitted when absent. Shortened to its first two letters (`xhigh` → `xh`) under width pressure |
 | bar + `12%` | Context-window fill on a calm gradient: muted green that warms from `CC_AMBER`, turns orange around `CC_RED` and red at 100%. The bar is `CC_CELLS` cells wide and narrows under width pressure |
 | `123k/1m` | Tokens in context / context-window size. The count turns amber while the prompt cache is cold — the session has idled past the cache TTL (1h or 5m, read from the transcript), so the next request rewrites the whole context into the cache. When the bar is collapsed the count carries the fill color instead |
 | `30%` | Rolling 5-hour rate-limit usage, on the same gradient. The reset tail (`⟳ 2.4h`, `⟳  45m`) is time to the reset, shown when the line has room. At `CC_RED` usage or within `CC_RESET_SOON` minutes of the reset it is never dropped |
@@ -82,14 +82,14 @@ When the assembled line is wider than the terminal it collapses in priority orde
 shedding what the line states twice before what it states once. The context bar goes
 first, since it draws the percentage printed beside it: it narrows to 5/7 and then
 3/7 of `CC_CELLS` (with the default 7, to 5 and then 3 cells, never below one) and is
-then dropped altogether, its fill color moving onto the token count. Next the reset
-tail goes, unless it is urgent (see `30%` above), then the model-scoped segment and
-then the weekly segment, each below
-`CC_RED`. After that the
-session `w:` (write) figure is dropped, then `r:` (read); then the branch is shortened
-to `CC_BRANCH_MIN`; finally the percentage is dropped too. The widest form that fits
-is shown. This reads the terminal width from the `COLUMNS` variable Claude
-Code exports (2.1.153+) and fits the line into `COLUMNS` minus a `CC_RESERVE`
+then dropped altogether, its fill color moving onto the token count. Next the
+reasoning effort shortens to its first two letters. Then the reset tail goes, unless
+it is urgent (see `30%` above), then the model-scoped segment and then the weekly
+segment, each below `CC_RED`. After that the session `w:` (write) figure is
+dropped, then `r:` (read); then the branch is shortened to `CC_BRANCH_MIN`; finally
+the percentage is dropped too. The widest form that fits is shown. This reads the
+terminal width from the `COLUMNS` variable Claude Code exports (2.1.153+) and fits
+the line into `COLUMNS` minus a `CC_RESERVE`
 reserve (default 4): Claude Code draws the status line inside a padded box narrower
 than the terminal, so a line reaching the box edge would be cut with an ellipsis
 instead of collapsing. When `COLUMNS` is absent, or with `CC_COMPACT=0`, the full

@@ -313,7 +313,14 @@ fi
 # --- assemble (fixed widths: pct 4, tokens 4, r/w 4, 5h 4) ---
 # task-27 (decision-2): superseded — head="${dot}${BOLD}${model}${R}${fbmark}"
 head="${BOLD}${model}${R}${fbmark}"
-[ -n "$effort" ] && head="${head} ${DIM}${effort}${R}"
+# superseded — [ -n "$effort" ] && head="${head} ${DIM}${effort}${R}"
+# hd1 shortens the effort to two letters (xhigh -> xh).
+hd1=$head
+if [ -n "$effort" ]; then
+  hd1="${head} ${DIM}${effort:0:2}${R}"
+  head="${head} ${DIM}${effort}${R}"
+fi
+hd0=$head
 
 # task-26: width tiers for the context segment (each carries its leading sep).
 # ctx0 (full) is the bar + colored pct + dim tokens, as before. Under width pressure
@@ -689,10 +696,15 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   #        "ctx4 tok2 br1 rs1 wk1")
   # task-61: after the tail, the non-urgent model-scoped segment drops, then the
   # non-urgent weekly segment.
-  tiers=("ctx0 tok0 br0 rs0 wk0 md0" "ctx1 tok0 br0 rs0 wk0 md0" "ctx2 tok0 br0 rs0 wk0 md0" \
-         "ctx3 tok0 br0 rs0 wk0 md0" "ctx3 tok0 br0 rs1 wk0 md0" "ctx3 tok0 br0 rs1 wk0 md1" \
-         "ctx3 tok0 br0 rs1 wk1 md1" "ctx3 tok1 br0 rs1 wk1 md1" "ctx3 tok2 br0 rs1 wk1 md1" \
-         "ctx3 tok2 br1 rs1 wk1 md1" "ctx4 tok2 br1 rs1 wk1 md1")
+  # superseded — tiers=("ctx0 tok0 br0 rs0 wk0 md0" "ctx1 tok0 br0 rs0 wk0 md0" "ctx2 tok0 br0 rs0 wk0 md0" \
+  # superseded —        "ctx3 tok0 br0 rs0 wk0 md0" "ctx3 tok0 br0 rs1 wk0 md0" "ctx3 tok0 br0 rs1 wk0 md1" \
+  # superseded —        "ctx3 tok0 br0 rs1 wk1 md1" "ctx3 tok1 br0 rs1 wk1 md1" "ctx3 tok2 br0 rs1 wk1 md1" \
+  # superseded —        "ctx3 tok2 br1 rs1 wk1 md1" "ctx4 tok2 br1 rs1 wk1 md1")
+  # The effort shortens (hd1) once the bar is gone.
+  tiers=("ctx0 tok0 br0 rs0 wk0 md0 hd0" "ctx1 tok0 br0 rs0 wk0 md0 hd0" "ctx2 tok0 br0 rs0 wk0 md0 hd0" \
+         "ctx3 tok0 br0 rs0 wk0 md0 hd0" "ctx3 tok0 br0 rs0 wk0 md0 hd1" "ctx3 tok0 br0 rs1 wk0 md0 hd1" \
+         "ctx3 tok0 br0 rs1 wk0 md1 hd1" "ctx3 tok0 br0 rs1 wk1 md1 hd1" "ctx3 tok1 br0 rs1 wk1 md1 hd1" \
+         "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx3 tok2 br1 rs1 wk1 md1 hd1" "ctx4 tok2 br1 rs1 wk1 md1 hd1")
   cands=()
   for trio in "${tiers[@]}"; do
     # superseded — read -r cn tn bn <<< "$trio"
@@ -701,9 +713,11 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
     # superseded — cands+=("${head}${!cn}${!rn}${!bn}${!tn}${tailseg}")
     # task-61: superseded — read -r cn tn bn rn kn <<< "$trio"
     # task-61: superseded — cands+=("${head}${!cn}${!rn}${!kn}${!bn}${!tn}${tailseg}")
-    read -r cn tn bn rn kn mn <<< "$trio"
+    # superseded — read -r cn tn bn rn kn mn <<< "$trio"
     # superseded — cands+=("${head}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${tailseg}")
-    cands+=("${head}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${rcseg}${tailseg}")
+    # superseded — cands+=("${head}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${rcseg}${tailseg}")
+    read -r cn tn bn rn kn mn hn <<< "$trio"
+    cands+=("${!hn}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${rcseg}${tailseg}")
   done
   sel=$(( ${#tiers[@]} - 1 ))               # none fits -> the narrowest tier, as before
   i=0
@@ -717,8 +731,10 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
   # superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}
   # task-61: superseded — read -r cn tn bn rn kn <<< "${tiers[$sel]}"
   # task-61: superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}
-  read -r cn tn bn rn kn mn <<< "${tiers[$sel]}"
-  ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}; md=${!mn}
+  # superseded — read -r cn tn bn rn kn mn <<< "${tiers[$sel]}"
+  # superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}; md=${!mn}
+  read -r cn tn bn rn kn mn hn <<< "${tiers[$sel]}"
+  ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}; md=${!mn}; head=${!hn}
 fi
 # task-37: the token tiers render after rest (5h) and the branch instead of
 # between the context segment and rest; the collapse ladder still drops them first.
