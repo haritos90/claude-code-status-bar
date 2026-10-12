@@ -74,13 +74,19 @@ AMB=$'\033[38;2;240;190;70m'; GRN=$'\033[38;2;120;190;120m'   # fixed marker col
 # superseded —   else printf '\033[38;2;120;190;120m'
 # superseded —   fi
 # superseded — }
-# Calm gradient: muted green warms from CC_AMBER, red at 100.
-col() { # pct -> ANSI color
+# Calm gradients, one tone per percentage; all warm to red.
+col() { # pct [tone: ctx 5h 7d md] -> ANSI color
   local p=${1:-0} a=${CC_AMBER:-50} r=${CC_RED:-80} i=1 p0 p1 k s
   [ "$p" -lt 0 ] && p=0; [ "$p" -gt 100 ] && p=100
   [ "$r" -lt "$a" ] && r=$a
   local P=(0 "$a" $(( a + (r - a) * 2 / 3 )) $(( r + (100 - r) / 4 )) 100)
-  local RR=(110 135 200 230 230) GG=(140 165 175 140 85) BB=(110 110 95 80 70)
+  # Anchors stay distinct under the tmux 256-color clamp.
+  case "${2:-ctx}" in
+    5h) local RR=(70 90 160 235 230) GG=(118 150 150 140 85) BB=(172 210 250 190 70) ;;    # blue
+    7d) local RR=(60 65 220 240 230) GG=(150 182 205 170 85) BB=(150 175 110 70 70) ;;     # teal
+    md) local RR=(145 165 210 235 230) GG=(110 120 110 90 85) BB=(175 205 190 125 70) ;;   # violet
+    *)  local RR=(110 135 200 230 230) GG=(140 165 175 140 85) BB=(110 110 95 80 70) ;;    # green
+  esac
   while [ "$i" -lt 4 ] && [ "$p" -gt "${P[$i]}" ]; do i=$((i+1)); done
   p0=${P[$((i-1))]}; p1=${P[$i]}; s=$(( p1 - p0 )); [ "$s" -le 0 ] && s=1; k=$(( p - p0 ))
   printf '\033[38;2;%d;%d;%dm' \
@@ -393,7 +399,7 @@ rest=""; rs0=""; rs1=""; rs2=""      # rs2: no tail, even urgent
 # fi
 # The tail shows when it fits; urgent tails are pinned.
 if [ -n "$lim5" ]; then
-  LC=$(col "$lim5")
+  LC=$(col "$lim5" 5h)
   seg5="${LC}$(pad 4 "${lim5}%")${R}"
   tail5=""; pin5=0
   case "$reset5" in *[!0-9]*) reset5="" ;; esac
@@ -468,7 +474,7 @@ mktail() {                                 # $1 = resets_at, $2 = color; sets TA
 # wk1 and wk3 keep an urgent (CC_RED) one.
 wk=""; wk0=""; wk1=""; wk2=""; wk3=""; wk4=""
 if [ -n "$lim7" ]; then
-  WC=$(col "$lim7")
+  WC=$(col "$lim7" 7d)
   mktail "$reset7" "$WC"
   # superseded — seg7="${DIM}7d ${R}${WC}$(pad 4 "${lim7}%")${R}${TAIL}"
   # superseded — wk0="${sep}${seg7}"
@@ -482,7 +488,7 @@ wk=$wk0
 # Usage-cache fallback: weekly_scoped limits from the /usage snapshot.
 # Shown for any current model; a matching one is preferred.
 # Memoized on the config's size, mtime and the model id.
-staleM=0
+# superseded — staleM=0
 if [ "$usecfg" = 1 ]; then
   uf="$CACHE_DIR/usage"; ckey="${cszmt:-0 0} ${modelid:--}"
   psz=""; pmt=""; pmid=""; fetchedM=0
@@ -511,7 +517,7 @@ if [ "$usecfg" = 1 ]; then
   case "$fetchedM" in ''|*[!0-9]*) fetchedM=0 ;; esac
   # A rolled-over window invalidates the snapshot.
   [ "$resetM" -gt 0 ] && [ "$resetM" -le "$now" ] && { limM=""; aliasM=""; }
-  [ $(( now - fetchedM )) -gt 3600 ] && staleM=1      # older than 1h: dim
+  # superseded — [ $(( now - fetchedM )) -gt 3600 ] && staleM=1      # older than 1h: dim
 fi
 
 # Model-scoped usage (task-61): alias and figures come from the jq pass at the
@@ -523,7 +529,8 @@ fi
 md=""; md0=""; md1=""; md2=""; md3=""; md4=""
 if [ -n "$limM" ] && [ -n "$aliasM" ]; then
   # superseded — MC=$(col "$limM")
-  MC=$(col "$limM"); [ "$staleM" = 1 ] && MC=$DIM
+  # superseded — MC=$(col "$limM"); [ "$staleM" = 1 ] && MC=$DIM
+  MC=$(col "$limM" md)                     # stale snapshots keep the color
   mktail "$resetM" "$MC"
   # superseded — segm="${DIM}${aliasM} ${R}${MC}$(pad 4 "${limM}%")${R}${TAIL}"
   # superseded — md0="${sep}${segm}"

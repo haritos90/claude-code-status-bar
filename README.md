@@ -67,9 +67,9 @@ manually.
 | `max` | Reasoning effort; omitted when absent. Shortened to its first two letters (`xhigh` → `xh`) under width pressure |
 | bar + `12%` | Context-window fill on a calm gradient: muted green that warms from `CC_AMBER`, turns orange around `CC_RED` and red at 100%. The bar is `CC_CELLS` cells wide and narrows under width pressure |
 | `123k/1m` | Tokens in context / context-window size. The count turns amber while the prompt cache is cold — the session has idled past the cache TTL (1h or 5m, read from the transcript), so the next request rewrites the whole context into the cache. When the bar is collapsed the count carries the fill color instead; under further width pressure the count is dropped before any percentage |
-| `30%` | Rolling 5-hour rate-limit usage, on the same gradient. The reset tail (`⟳ 2.4h`, `⟳  45m`) is time to the reset, shown when the line has room. At `CC_RED` usage or within `CC_RESET_SOON` minutes of the reset it is urgent and outlasts everything but the percentages |
-| `7d  95% ⟳ 8.3h` | Rolling 7-day rate-limit usage and time to its reset (`⟳ 3.5d`, `⟳  15h`, `⟳ 8.3h`, `⟳  45m`). Shown whenever the data is present. Under width pressure the tail goes first and the percentage stays until only percentages are left to drop; at `CC_RED` both are kept longer |
-| `fable  36% ⟳ 4.6d` | Model-scoped weekly usage, such as the Fable limit, shown whatever the current model. Claude Code does not pass it on stdin, so it is read from the usage snapshot Claude Code stores in `~/.claude.json` (under `CLAUDE_CONFIG_DIR` when set) whenever it fetches usage, for example on `/usage`. A snapshot older than an hour renders dim; one whose weekly window has since reset is not shown. With several model limits, the current model's is preferred. A `rate_limits` key on stdin extending a window name with the current model's alias (`seven_day_fable`) takes precedence over the snapshot. Labels come from the data, not from a model list. Collapses like the weekly segment: tail first, percentage late, both kept longer at `CC_RED` |
+| `30%` | Rolling 5-hour rate-limit usage, in blue that warms through lavender and pink to red. The reset tail (`⟳ 2.4h`, `⟳  45m`) is time to the reset, shown when the line has room. At `CC_RED` usage or within `CC_RESET_SOON` minutes of the reset it is urgent and outlasts everything but the percentages |
+| `7d  95% ⟳ 8.3h` | Rolling 7-day rate-limit usage and time to its reset (`⟳ 3.5d`, `⟳  15h`, `⟳ 8.3h`, `⟳  45m`), in teal that warms through yellow and orange to red. Shown whenever the data is present. Under width pressure the tail goes first and the percentage stays until only percentages are left to drop; at `CC_RED` both are kept longer |
+| `fable  36% ⟳ 4.6d` | Model-scoped weekly usage, such as the Fable limit, shown whatever the current model, in violet that warms through orchid and pink to red. Claude Code does not pass it on stdin, so it is read from the usage snapshot Claude Code stores in `~/.claude.json` (under `CLAUDE_CONFIG_DIR` when set) whenever it fetches usage, for example on `/usage`. The figure is as old as that snapshot, which can be days; a snapshot whose weekly window has since reset is not shown. With several model limits, the current model's is preferred. A `rate_limits` key on stdin extending a window name with the current model's alias (`seven_day_fable`) takes precedence over the snapshot. Labels come from the data, not from a model list. Collapses like the weekly segment: tail first, percentage late, both kept longer at `CC_RED` |
 | `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`. Under width pressure it shortens one letter at a time down to its first `CC_BRANCH_MIN` letters (`⎇ m…`), then is dropped |
 | `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); shown only with `CC_TOKENS=1` |
 | `rc` | Remote Control is attached to the session (Claude Code sets `CLAUDE_CODE_BRIDGE_SESSION_ID`). Drawn in the green of Claude Code's `/rc` indicator: 256-color inside tmux, where Claude Code itself renders in 256 colors, truecolor elsewhere. Never dropped by the collapse |
@@ -77,6 +77,13 @@ manually.
 
 Numeric segments, the reset tail included, are right-padded to a fixed width, so
 the line does not shift as values change digit count.
+
+Each percentage has its own color, so the four read apart at a glance: green for
+the context fill, blue for the 5-hour, teal for the weekly and violet for the
+model-scoped usage. Each warms from `CC_AMBER` along its own path, and all reach
+the same red at 100%. The reset tails take their percentage's color. The tones
+stay distinct inside tmux, where Claude Code reduces colors to the 256-color
+palette.
 
 When the assembled line is wider than the terminal it collapses in priority order,
 shedding what the line states twice before what it states once. The context bar goes
@@ -130,7 +137,7 @@ Set these as environment variables in the `statusLine.command`, for example
 | `CC_COMPACT` | `1` | Collapse the line to fit the terminal width; set `0` to always keep the full line |
 | `CC_RESERVE` | `4` | Columns subtracted from `COLUMNS` when fitting — the padding Claude Code draws around the status line; `0` fits to the full width |
 | `CC_TOKENS` | `0` | Show the cumulative session read/write token segment; set `1` to enable it |
-| `CC_AMBER` / `CC_RED` | `50` / `80` | Color gradient anchors (context fill, 5h, weekly, and model-scoped usage): warming starts at `CC_AMBER`, orange around `CC_RED`. At `CC_RED` the reset tails and the weekly and model-scoped percentages are kept longer under width pressure |
+| `CC_AMBER` / `CC_RED` | `50` / `80` | Color gradient anchors for every percentage: warming starts at `CC_AMBER`, the hottest tones begin around `CC_RED`, and each ends red at 100%. At `CC_RED` the reset tails and the weekly and model-scoped percentages are kept longer under width pressure |
 | `CC_RESET_SOON` | `15` | Minutes to the 5h reset under which its reset tail counts as urgent and is kept longer |
 | `CC_BRANCH_MAX` | `18` | Max git-branch length before truncation |
 | `CC_BRANCH_MIN` | `1` | Fewest branch letters kept while the collapse ladder shortens it; with less room the branch is dropped |
