@@ -72,6 +72,7 @@ manually.
 | `fable  36% ⟳ 4.6d` | Model-scoped rate-limit usage, present when `rate_limits` carries a window key extended with an alias matching the current model (`seven_day_opus`, `seven_day_fable`). The alias is read from the data, not from a model list, so it follows whatever limits the CLI reports. At `CC_RED` it is never dropped |
 | `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`, shortened to `CC_BRANCH_MIN` under width pressure |
 | `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); shown only with `CC_TOKENS=1` |
+| `rc` | Remote Control is attached to the session (Claude Code sets `CLAUDE_CODE_BRIDGE_SESSION_ID`). Drawn in the green of Claude Code's `/rc` indicator: 256-color inside tmux, where Claude Code itself renders in 256 colors, truecolor elsewhere. Never dropped by the collapse |
 | `⇧ v1.7` | Shown once after a self-update, naming the new version |
 
 Numeric segments, the reset tail included, are right-padded to a fixed width, so

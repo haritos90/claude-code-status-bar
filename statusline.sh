@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code status line — model · effort · context bar · 5h limit · 7d limit
-# · model limit · git branch · session tokens.
+# · model limit · git branch · session tokens · Remote Control.
 # All values come from the JSON on stdin. Numeric segments are right-padded to a
 # fixed width so the line does not shift as values change digit count.
 # Correct values need Claude Code 2.1.243 or newer.
@@ -559,6 +559,18 @@ if [ -f "$CACHE_DIR/applied-version" ]; then
   fi
 fi
 
+# Remote Control: the CLI exports the bridge id while attached.
+rcseg=""
+if [ -n "${CLAUDE_CODE_BRIDGE_SESSION_ID:-}" ]; then
+  # The CLI's success green; inside tmux it renders 256-color.
+  if [ -n "${TMUX:-}" ] && [ -z "${CLAUDE_CODE_TMUX_TRUECOLOR:-}" ]; then
+    RCC=$'\033[38;5;114m'
+  else
+    RCC=$'\033[38;2;78;186;101m'
+  fi
+  rcseg="${sep}${RCC}rc${R}"
+fi
+
 # task-26: choose the widest context+tokens combination whose whole line fits $COLUMNS
 # (Claude Code exports it, >= 2.1.153). cols=0 (unset, older Claude Code) or CC_COMPACT=0
 # keeps the full bar, matching the prior output. Visible width strips ANSI SGR and UTF-8
@@ -635,7 +647,8 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
     # task-61: superseded — read -r cn tn bn rn kn <<< "$trio"
     # task-61: superseded — cands+=("${head}${!cn}${!rn}${!kn}${!bn}${!tn}${tailseg}")
     read -r cn tn bn rn kn mn <<< "$trio"
-    cands+=("${head}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${tailseg}")
+    # superseded — cands+=("${head}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${tailseg}")
+    cands+=("${head}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${rcseg}${tailseg}")
   done
   sel=$(( ${#tiers[@]} - 1 ))               # none fits -> the narrowest tier, as before
   i=0
@@ -658,7 +671,8 @@ fi
 # task-39: superseded — out="${head}${ctx}${rest}${tok}${tailseg}"
 # superseded — out="${head}${ctx}${rest}${brseg}${tok}${tailseg}"
 # task-61: superseded — out="${head}${ctx}${rest}${wk}${brseg}${tok}${tailseg}"
-out="${head}${ctx}${rest}${wk}${md}${brseg}${tok}${tailseg}"
+# superseded — out="${head}${ctx}${rest}${wk}${md}${brseg}${tok}${tailseg}"
+out="${head}${ctx}${rest}${wk}${md}${brseg}${tok}${rcseg}${tailseg}"
 
 printf '%s' "$out"
 
