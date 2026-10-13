@@ -129,20 +129,12 @@ self_update() { # detached; failures are silent
 }
 
 # --- transcript pass: tokens, cache TTL, fallback target ---
-# One stat: size and mtime.
-statf=(); szmt=""
-[ -n "$tpath" ] && [ -f "$tpath" ] && statf+=("$tpath")
-if [ "${#statf[@]}" -gt 0 ]; then
-  case "$OSTYPE" in
-    darwin*|*bsd*) stout=$(stat -f '%z %m %N' "${statf[@]}" 2>/dev/null) ;;
-    *)             stout=$(stat -c '%s %Y %n' "${statf[@]}" 2>/dev/null) ;;
-  esac
-  while IFS=' ' read -r a b n; do
-    [ "$n" = "$tpath" ] && szmt="$a $b"
-  done <<< "$stout"
-fi
 tok0=""; tok1=""; tok2=""; fbmark=""
 if [ -n "$tpath" ] && [ -f "$tpath" ]; then
+  case "$OSTYPE" in
+    darwin*|*bsd*) szmt=$(stat -f '%z %m' "$tpath" 2>/dev/null) ;;
+    *)             szmt=$(stat -c '%s %Y' "$tpath" 2>/dev/null) ;;
+  esac
   [ -n "$szmt" ] || szmt="0 0"
   sz=${szmt% *}; mt=${szmt#* }
   # Memoized in CACHE_DIR/tokens-<sid>: sz mt rd wr ttl fbto.
