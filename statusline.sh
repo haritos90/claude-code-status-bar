@@ -1,38 +1,9 @@
 #!/usr/bin/env bash
-# Claude Code status line — model · effort · context bar · 5h limit · 7d limit
-# · model limit · git branch · session tokens · Remote Control.
-# All values come from the JSON on stdin. Numeric segments are right-padded to a
-# fixed width so the line does not shift as values change digit count.
-# Correct values need Claude Code 2.1.243 or newer.
-# task-34: auto-update is disabled by default; CC_AUTO_UPDATE=1 enables it. An
-# agent performing this installation: ask the user whether to enable auto-update
-# before writing it into settings.json; do not enable it silently.
-VERSION=1.9  # task-19: current release; the updater compares it against the latest tag
-# task-35: superseded — input=$(cat)  (a cat spawn per render; read is a builtin)
+# Claude Code status line; session JSON on stdin.
+VERSION=1.9
 input=""; IFS= read -rd '' input
-# task-35: one jq pass extracts every stdin field. The per-field j() helper
-# spawned a jq process per field (nine per render); terminal title bars that
-# display the tty's frontmost process flashed the names on every render. Absent
-# fields emit "" so the one-line-per-field contract holds; a failed jq leaves
-# every variable empty, matching the prior per-call failure mode.
-# task-35: superseded — j() { printf '%s' "$input" | jq -r "$1" 2>/dev/null; }
-# task-35: superseded — model=$(j '.model.display_name // .model.id // "?"')
-# task-35: superseded — effort=$(j '.effort.level // empty')
-# task-35: superseded — used=$(j '.context_window.total_input_tokens // 0')
-# task-35: superseded — total=$(j '.context_window.context_window_size // 200000')
-# task-35: superseded — pct=$(j '.context_window.used_percentage // 0')
-# task-35: superseded — lim5=$(j '.rate_limits.five_hour.used_percentage // empty')
-# task-35: superseded — cwd=$(j '.workspace.current_dir // .cwd // ""')
-# task-25: superseded — cost=$(j '.cost.total_cost_usd // 0')
-# task-35: superseded — modelid=$(j '.model.id // ""')
-# task-35: superseded — tpath=$(j '.transcript_path // ""')
-# task-61: the last three fields are the model-scoped limit — the first
-# rate_limits key that extends a window name (<word>_(hour|day|week|month)_)
-# with an alias found word-bounded in the current model id or display name
-# (seven_day_opus once, seven_day_fable now). The key is discovered in the
-# data, never hardcoded, so a renamed or retired alias (the obsolete sonnet
-# limit) follows the CLI without a script change. No match emits three empty
-# lines, keeping the one-line-per-field contract.
+# One jq pass; spawns flash in terminal title bars.
+# Last three fields: the model-scoped limit, matched by alias.
 fields=$(printf '%s' "$input" | jq -r '
   (.model.display_name // .model.id // "?"),
   (.effort.level // ""),
@@ -68,13 +39,6 @@ limM=${limM%.*}
 
 R=$'\033[0m'; DIM=$'\033[38;2;120;120;120m'; BOLD=$'\033[1m'
 AMB=$'\033[38;2;240;190;70m'; GRN=$'\033[38;2;120;190;120m'   # fixed marker colors
-# superseded — col() { # pct -> ANSI color; task-17: amber/red boundaries via CC_AMBER/CC_RED
-# superseded —   if   [ "${1:-0}" -ge "${CC_RED:-80}" ]; then printf '\033[38;2;225;95;75m'
-# superseded —   elif [ "${1:-0}" -ge "${CC_AMBER:-50}" ]; then printf '\033[38;2;240;190;70m'
-# superseded —   else printf '\033[38;2;120;190;120m'
-# superseded —   fi
-# superseded — }
-# Calm gradients, one tone per percentage; all warm to red.
 col() { # pct [tone: ctx 5h 7d md] -> ANSI color
   local p=${1:-0} a=${CC_AMBER:-50} r=${CC_RED:-80} i=1 p0 p1 k s
   [ "$p" -lt 0 ] && p=0; [ "$p" -gt 100 ] && p=100
@@ -94,28 +58,12 @@ col() { # pct [tone: ctx 5h 7d md] -> ANSI color
     $(( GG[i-1] + (GG[i] - GG[i-1]) * k / s )) \
     $(( BB[i-1] + (BB[i] - BB[i-1]) * k / s ))
 }
-pad() { printf "%${1}s" "$2"; }   # right-align $2 to width $1 (fixed-width segments)
+pad() { printf "%${1}s" "$2"; }   # right-align $2 to width $1
 C=$(col "$pct")
 sep=" ${DIM}·${R} "
 
 # --- context bar ---
-# task-9: superseded — CELLS=10
-# task-14: superseded — CELLS=8
-# task-17: CC_CELLS overrides the width so an auto-update does not clobber a chosen
-# value; the default reproduces the prior fixed CELLS=7.
 CELLS=${CC_CELLS:-7}
-# task-50: the ladder narrows the bar before dropping it, so three widths are built:
-# CELLS, then 5/7 and 3/7 of it (the default 7 yields 5 and 3), never below one cell.
-# mkbar assigns BAR instead of printing so the caller needs no command substitution;
-# rounding matches the previous single-bar computation at every width.
-# task-50: superseded — the single bar was built inline:
-# filled=$(( (${pct:-0} * CELLS + 50) / 100 ))
-# [ "$filled" -gt "$CELLS" ] && filled=$CELLS
-# [ "$filled" -lt 0 ] && filled=0
-# fstr=""; estr=""; i=0
-# while [ "$i" -lt "$filled" ]; do fstr="${fstr}█"; i=$((i+1)); done
-# i=0; while [ "$i" -lt $((CELLS - filled)) ]; do estr="${estr}░"; i=$((i+1)); done
-# bar="${C}${fstr}${DIM}${estr}${R}"
 mkbar() {                                  # $1 = cells; sets BAR
   local cells=$1 filled fstr="" estr="" i=0
   filled=$(( (${pct:-0} * cells + 50) / 100 ))
@@ -125,21 +73,14 @@ mkbar() {                                  # $1 = cells; sets BAR
   i=0; while [ "$i" -lt $((cells - filled)) ]; do estr="${estr}░"; i=$((i+1)); done
   BAR="${C}${fstr}${DIM}${estr}${R}"
 }
-# superseded — CELLS1=$(( (CELLS * 5 + 3) / 7 )); [ "$CELLS1" -lt 1 ] && CELLS1=1
-# superseded — CELLS2=$(( (CELLS * 3 + 3) / 7 )); [ "$CELLS2" -lt 1 ] && CELLS2=1
-# A zero-cell bar stays zero at every tier.
+# A zero-cell bar stays zero.
 CELLS1=$(( (CELLS * 5 + 3) / 7 )); [ "$CELLS1" -lt 1 ] && [ "$CELLS" -ge 1 ] && CELLS1=1
 CELLS2=$(( (CELLS * 3 + 3) / 7 )); [ "$CELLS2" -lt 1 ] && [ "$CELLS" -ge 1 ] && CELLS2=1
 mkbar "$CELLS";  bar=$BAR
 mkbar "$CELLS1"; bar1=$BAR
 mkbar "$CELLS2"; bar2=$BAR
 
-# task-35: integer arithmetic replaces the two awk spawns per call. The task-11
-# radix concern is gone with awk: the tenth digit is computed and printed as an
-# integer, so no locale can reintroduce a comma. Rounding is decimal-correct;
-# awk's %.1f differed only where the binary double of an exact half rounds down.
-# task-35: superseded — if [ "$n" -ge 1000000 ]; then LC_ALL=C awk -v n="$n" 'BEGIN{v=n/1000000; if(v==int(v))printf"%dm",v;else printf"%.1fm",v}'
-# task-35: superseded — elif [ "$n" -ge 1000 ]; then awk -v n="$n" 'BEGIN{printf"%dk",int(n/1000+0.5)}'
+# 1234 -> 1k, 1234567 -> 1.2m
 fmt() {
   local n=$1 t
   if [ "$n" -ge 1000000 ]; then
@@ -151,22 +92,15 @@ fmt() {
   fi
 }
 
-# --- self-update (task-20, decision-1; opt-in per task-33, decision-3) ------
-# Disabled unless CC_AUTO_UPDATE=1. When enabled, at most once per day a detached
-# background process checks the latest GitHub release and, when it is newer than
-# VERSION, atomically replaces this script with the tagged statusline.sh. It never
-# blocks the render; all failures are silent. State lives under CACHE_DIR. The
-# trigger at the end of the script decides whether to spawn self_update.
+# --- self-update: opt-in, detached, silent ---
 CC_REPO="haritos90/claude-code-status-bar"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/claude-code-status-bar"
 
-# task-38: current epoch seconds, spawn-free where printf %(fmt)T exists (bash
-# 4.2+); /bin/bash 3.2 falls back to one date spawn. Used by the 5h reset tail
-# and the self-update trigger.
+# Spawn-free clock on bash 4.2+.
 now=$(printf '%(%s)T' -1 2>/dev/null)
 case "$now" in ''|*[!0-9]*) now=$(date +%s) ;; esac
 
-vgt() { # exit 0 iff $1 is strictly newer than $2 (dotted numeric versions)
+vgt() { # true iff $1 is newer than $2
   awk -v a="$1" -v b="$2" 'BEGIN{
     na=split(a,A,"."); nb=split(b,B,".");
     n=(na>nb?na:nb);
@@ -175,14 +109,14 @@ vgt() { # exit 0 iff $1 is strictly newer than $2 (dotted numeric versions)
     exit 1}'
 }
 
-self_update() { # detached background; silent; never surfaces failures
+self_update() { # detached; failures are silent
   local tag latest self dir tmp
   tag=$(curl -fsSL --max-time 10 "https://api.github.com/repos/$CC_REPO/releases/latest" 2>/dev/null \
         | jq -r '.tag_name // empty' 2>/dev/null)
   [ -n "$tag" ] || return 0
   latest=${tag#v}
-  vgt "$latest" "$VERSION" || return 0             # only ever move forward
-  self="${SELF:-$0}"; [ -f "$self" ] || return 0   # SELF overridable for tests
+  vgt "$latest" "$VERSION" || return 0             # never downgrade
+  self="${SELF:-$0}"; [ -f "$self" ] || return 0   # SELF: test override
   dir=$(dirname "$self")
   tmp=$(mktemp "$dir/.statusline.XXXXXX" 2>/dev/null) || return 0
   if curl -fsSL --max-time 20 "https://raw.githubusercontent.com/$CC_REPO/$tag/statusline.sh" -o "$tmp" 2>/dev/null \
@@ -194,69 +128,10 @@ self_update() { # detached background; silent; never surfaces failures
   fi
 }
 
-# fallback marker — Claude Code records an automatic model switch as an assistant
-# "fallback" content block {from,to} (e.g. the selected model is unavailable). The
-# stdin .model reflects the effective model, so it silently disagrees with the
-# startup banner. When the active model equals the newest fallback target, flag it
-# with an amber arrow; a later manual switch away makes .model.id stop matching and
-# the marker drops.
-# task-35: the per-render tail+jq scan moved into the memoized transcript pass
-# below; the newest fallback target rides in the same cache file as the token
-# totals and the mark is recomputed from it on every render.
-# task-35: superseded — fbto=$(tail -n 4000 "$tpath" 2>/dev/null \
-# task-35: superseded —       | jq -r 'select(.type=="assistant") | .message.content[]?
-# task-35: superseded —                | select(.type=="fallback") | .to.model' 2>/dev/null | tail -1)
-# task-35: superseded — [ "$fbto" = "$modelid" ] && fbmark=" $(col 50)⤵${R}"
-
-# task-27 (decision-2): superseded — the activity dot is removed. Its signals
-# (cost.total_api_duration_ms and the transcript mtime) advance only at message and
-# tool boundaries, and the statusLine renders only at message completion plus the
-# refreshInterval timer with no real-time busy field, so across a long generation span
-# the dot decayed to green while the model was still working. A reliable indicator
-# needs out-of-band lifecycle hooks (see decision-2). Kept commented for a restore.
-# dot=""
-# if [ "${CC_DOT:-0}" = "1" ]; then
-#   sid=$(j '.session_id // "default"')
-#   api=$(j '.cost.total_api_duration_ms // 0'); case "$api" in ''|*[!0-9]*) api=0 ;; esac
-#   amt=0; [ -n "$tpath" ] && amt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null || printf 0)
-#   case "$amt" in ''|*[!0-9]*) amt=0 ;; esac
-#   win=${CC_BUSY_WINDOW:-10}; anow=$(date +%s); af="$CACHE_DIR/activity-$sid"
-#   pa=$api pm=$amt la=$((anow - win - 1))                 # first render defaults to idle
-#   [ -f "$af" ] && IFS=' ' read -r pa pm la < "$af" 2>/dev/null
-#   case "$pa" in ''|*[!0-9]*) pa=$api ;; esac
-#   case "$pm" in ''|*[!0-9]*) pm=$amt ;; esac
-#   case "$la" in ''|*[!0-9]*) la=$anow ;; esac
-#   { [ "$api" -gt "$pa" ] || [ "$amt" -gt "$pm" ]; } && la=$anow   # advanced since last render -> active
-#   mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s\n' "$api" "$amt" "$la" > "$af" 2>/dev/null
-#   if [ "$((anow - la))" -le "$win" ]; then
-#     lvl=$(( anow % 6 )); [ "$lvl" -gt 3 ] && lvl=$(( 6 - lvl ))   # 0,1,2,3,2,1 triangle over 6s
-#     dot="$(printf '\033[38;2;235;%s;55m' "$(( 120 + lvl * 18 ))")●${R} "   # breathing orange = active
-#   else
-#     dot="$(printf '\033[38;2;110;150;110m')●${R} "                         # calm dim green = idle
-#   fi
-# fi
-
-# --- transcript pass: token throughput (task-32) + fallback target ----------
-# Cumulative read/write across the transcript: read = Σ(input + cache_read +
-# cache_creation), write = Σ output. Hidden by default; CC_TOKENS=1 opts in.
-# task-35: one memoized pass serves both features. The totals and the newest
-# fallback target are keyed on the transcript's size+mtime in
-# CACHE_DIR/tokens-<sid> (fields: sz mt rd wr fbto), so idle re-renders spawn no
-# jq and one stat; the full rescan runs only when the transcript changed (once
-# per turn). jq streams with -n 'reduce(inputs)' (no slurp). Compaction that
-# prunes the transcript lowers the total. Pre-task-35 cache files carry four
-# fields; fbto reads empty and heals on the next transcript change. tok0/tok1
-# are the width tiers (full / read-only); tok2 is empty (segment dropped).
-# Hidden until a turn records usage.
-# superseded — the usage-snapshot fallback (refreshes only on /usage):
-# # Usage cache: Claude Code's /usage snapshot, read when stdin lacks
-# # a model-scoped limit.
-# cfg="${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json"
-# usecfg=0; [ -z "$aliasM" ] && [ -f "$cfg" ] && usecfg=1
-# One stat for the transcript's size and mtime.
+# --- transcript pass: tokens, cache TTL, fallback target ---
+# One stat: size and mtime.
 statf=(); szmt=""
 [ -n "$tpath" ] && [ -f "$tpath" ] && statf+=("$tpath")
-# superseded — [ "$usecfg" = 1 ] && statf+=("$cfg")
 if [ "${#statf[@]}" -gt 0 ]; then
   case "$OSTYPE" in
     darwin*|*bsd*) stout=$(stat -f '%z %m %N' "${statf[@]}" 2>/dev/null) ;;
@@ -264,27 +139,13 @@ if [ "${#statf[@]}" -gt 0 ]; then
   esac
   while IFS=' ' read -r a b n; do
     [ "$n" = "$tpath" ] && szmt="$a $b"
-    # superseded — [ "$n" = "$cfg" ] && cszmt="$a $b"
   done <<< "$stout"
 fi
 tok0=""; tok1=""; tok2=""; fbmark=""
 if [ -n "$tpath" ] && [ -f "$tpath" ]; then
-  # task-35: superseded — sid=$(j '.session_id // "default"')  (single jq pass, top)
-  # task-35: superseded — sz=$(stat -c %s "$tpath" 2>/dev/null || stat -f %z "$tpath" 2>/dev/null || printf 0)
-  # task-35: superseded — mt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null || printf 0)
-  # superseded — the transcript had its own stat (now shared, above):
-  # case "$OSTYPE" in                      # one stat; the GNU->BSD retry chain spawned four
-  #   darwin*|*bsd*) szmt=$(stat -f '%z %m' "$tpath" 2>/dev/null) ;;
-  #   *)             szmt=$(stat -c '%s %Y' "$tpath" 2>/dev/null) ;;
-  # esac
   [ -n "$szmt" ] || szmt="0 0"
   sz=${szmt% *}; mt=${szmt#* }
-  # task-43: the pass also carries the newest cache TTL (field order: sz mt rd wr
-  # ttl fbto — ttl is always numeric and sits before the possibly-empty fallback
-  # target so a blank target cannot shift fields; 0 = unknown). Pre-task-43 files
-  # put the target in the ttl slot; the numeric guard discards it and both fields
-  # heal on the next transcript change.
-  # task-43: superseded — [ -f "$tf" ] && IFS=' ' read -r psz pmt rd wr fbto < "$tf" 2>/dev/null
+  # Memoized in CACHE_DIR/tokens-<sid>: sz mt rd wr ttl fbto.
   tf="$CACHE_DIR/tokens-$sid"; rd=0; wr=0; ttl=0; psz=""; pmt=""; fbto=""
   [ -f "$tf" ] && IFS=' ' read -r psz pmt rd wr ttl fbto < "$tf" 2>/dev/null
   case "$rd" in ''|*[!0-9]*) rd=0 ;; esac; case "$wr" in ''|*[!0-9]*) wr=0 ;; esac
@@ -305,23 +166,19 @@ if [ -n "$tpath" ] && [ -f "$tpath" ]; then
       | "\(.r)\t\(.w)\t\(.t)\t\(.f)"' "$tpath" 2>/dev/null)
     case "$rd" in ''|*[!0-9]*) rd=0 ;; esac; case "$wr" in ''|*[!0-9]*) wr=0 ;; esac
     case "$ttl" in ''|*[!0-9]*) ttl=0 ;; esac
-    # task-43: superseded — printf '%s %s %s %s %s\n' "$sz" "$mt" "$rd" "$wr" "$fbto" > "$tf"
     mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s %s %s %s\n' "$sz" "$mt" "$rd" "$wr" "$ttl" "$fbto" > "$tf" 2>/dev/null
   fi
-  # superseded — [ -n "$fbto" ] && [ "$fbto" = "$modelid" ] && fbmark=" $(col 50)⤵${R}"
+  # ⤵: the active model is a fallback.
   [ -n "$fbto" ] && [ "$fbto" = "$modelid" ] && fbmark=" ${AMB}⤵${R}"
-  # superseded — if [ "${CC_TOKENS:-1}" != "0" ] && { [ "$rd" -gt 0 ] || [ "$wr" -gt 0 ]; }; then
   if [ "${CC_TOKENS:-0}" = "1" ] && { [ "$rd" -gt 0 ] || [ "$wr" -gt 0 ]; }; then
     tok0="${sep}${DIM}r:${R}$(pad 4 "$(fmt "$rd")") ${DIM}w:${R}$(pad 4 "$(fmt "$wr")")"
     tok1="${sep}${DIM}r:${R}$(pad 4 "$(fmt "$rd")")"
   fi
 fi
 
-# --- assemble (fixed widths: pct 4, tokens 4, r/w 4, 5h 4) ---
-# task-27 (decision-2): superseded — head="${dot}${BOLD}${model}${R}${fbmark}"
+# --- assemble ---
 head="${BOLD}${model}${R}${fbmark}"
-# superseded — [ -n "$effort" ] && head="${head} ${DIM}${effort}${R}"
-# hd1 shortens the effort to two letters (xhigh -> xh).
+# hd1: two-letter effort (xhigh -> xh)
 hd1=$head
 if [ -n "$effort" ]; then
   hd1="${head} ${DIM}${effort:0:2}${R}"
@@ -329,21 +186,7 @@ if [ -n "$effort" ]; then
 fi
 hd0=$head
 
-# task-26: width tiers for the context segment (each carries its leading sep).
-# ctx0 (full) is the bar + colored pct + dim tokens, as before. Under width pressure
-# the bar is dropped (colored pct + colored token count), then the pct too (colored
-# token count only). The used figure takes the fill color the bar otherwise carried;
-# the denominator stays dim. The widest tier that fits is chosen after the whole line
-# is assembled (see the COLUMNS check below).
-# task-50: the bar narrows before it goes, so there are five tiers: the bar at CELLS
-# (ctx0), at CELLS1 (ctx1) and at CELLS2 (ctx2) — all three with the dim count — then
-# the bar-less pct tier (ctx3) and the count alone (ctx4). The formatted pieces are
-# built once and shared, so the two added tiers cost no further command substitutions.
-# Now the count goes before the percent: ctx5, not ctx4.
-# task-43: while the prompt cache is cold — the session idled past the cache TTL
-# from the transcript pass (0 = unknown, defaults to 3600 s) — the used count
-# renders amber in every tier: those tokens will be rewritten into the cache by
-# the next request. Width and characters are unchanged; only the color shifts.
+# Amber count while the prompt cache is cold.
 UC=$DIM; UC1=$C
 if [ "${mt:-0}" -gt 0 ] 2>/dev/null; then
   cttl=$ttl; [ "$cttl" -gt 0 ] 2>/dev/null || cttl=3600
@@ -351,13 +194,7 @@ if [ "${mt:-0}" -gt 0 ] 2>/dev/null; then
     UC=$'\033[38;2;240;190;70m'; UC1=$UC
   fi
 fi
-# task-43: superseded — ctx0="${sep}${bar} ${C}$(pad 4 "${pct}%")${R}${sep}${DIM}$(pad 4 "$(fmt "$used")")/$(fmt "$total")${R}"
-# task-43: superseded — ctx1="${sep}${C}$(pad 4 "${pct}%")${R}${sep}${C}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
-# task-43: superseded — ctx2="${sep}${C}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
-# task-50: superseded — the three tiers repeated the pad/fmt substitutions:
-# ctx0="${sep}${bar} ${C}$(pad 4 "${pct}%")${R}${sep}${UC}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
-# ctx1="${sep}${C}$(pad 4 "${pct}%")${R}${sep}${UC1}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
-# ctx2="${sep}${UC1}$(pad 4 "$(fmt "$used")")${R}${DIM}/$(fmt "$total")${R}"
+# Context tiers: three bar widths, bar-less, bare percent.
 pctf=$(pad 4 "${pct}%"); usedf=$(pad 4 "$(fmt "$used")"); totalf=$(fmt "$total")
 pctseg="${C}${pctf}${R}"
 cntdim="${UC}${usedf}${R}${DIM}/${totalf}${R}"      # bar present: the count stays dim
@@ -366,39 +203,10 @@ ctx0="${sep}${bar} ${pctseg}${sep}${cntdim}"
 ctx1="${sep}${bar1} ${pctseg}${sep}${cntdim}"
 ctx2="${sep}${bar2} ${pctseg}${sep}${cntdim}"
 ctx3="${sep}${pctseg}${sep}${cntlit}"
-# superseded — ctx4="${sep}${cntlit}"     (the count outlived the percent)
-ctx5="${sep}${pctseg}"                     # the bare percent
+ctx4="${sep}${pctseg}"                     # the bare percent
 
-# rest — the 5h segment; the ladder picks rs0 or rs1.
-# superseded — rest=""; rs0=""; rs1=""
-rest=""; rs0=""; rs1=""; rs2=""      # rs2: no tail, even urgent
-# 5-hour rate-limit usage — task-38: bare colored percent, the dim "5h" label is
-# dropped. A reset tail (⟳ 2.4h / ⟳ 45m, in the percent's color) appears only when
-# the figure is actionable: usage at or above CC_RED, or the reset within
-# CC_RESET_SOON minutes (default 15). resets_at is epoch seconds; a missing or
-# non-numeric value, or a reset not in the future, yields no tail. Remaining time
-# formats as tenth-hours at or above 90 minutes, whole minutes below.
-# task-38: superseded — rest="${rest}${sep}${DIM}5h ${R}${LC}$(pad 4 "${lim5}%")${R}"
-# superseded — the tail showed only when urgent:
-# if [ -n "$lim5" ]; then
-#   LC=$(col "$lim5")
-#   seg5="${LC}$(pad 4 "${lim5}%")${R}"
-#   case "$reset5" in *[!0-9]*) reset5="" ;; esac
-#   if [ -n "$reset5" ] && [ "$reset5" -gt "$now" ]; then
-#     rem=$(( reset5 - now ))
-#     if [ "$lim5" -ge "${CC_RED:-80}" ] || [ "$rem" -le $(( ${CC_RESET_SOON:-15} * 60 )) ]; then
-#       # Space after ⟳: a fallback-font glyph covers the next cell.
-#       if [ "$rem" -ge 5400 ]; then
-#         t=$(( (rem + 180) / 360 ))
-#         seg5="${seg5} ${LC}⟳ $(( t / 10 )).$(( t % 10 ))h${R}"
-#       else
-#         seg5="${seg5} ${LC}⟳ $(( (rem + 30) / 60 ))m${R}"
-#       fi
-#     fi
-#   fi
-#   rest="${rest}${sep}${seg5}"
-# fi
-# The tail shows when it fits; urgent tails are pinned.
+# 5h tiers: tail, tail when urgent, none.
+rest=""; rs0=""; rs1=""; rs2=""
 if [ -n "$lim5" ]; then
   LC=$(col "$lim5" 5h)
   seg5="${LC}$(pad 4 "${lim5}%")${R}"
@@ -411,7 +219,7 @@ if [ -n "$lim5" ]; then
     else
       tv="$(( (rem + 30) / 60 ))m"
     fi
-    # Space after ⟳: a fallback-font glyph covers the next cell.
+    # Fallback glyphs cover the next cell.
     tail5=" ${LC}⟳ $(pad 4 "$tv")${R}"
     if [ "$lim5" -ge "${CC_RED:-80}" ] || [ "$rem" -le $(( ${CC_RESET_SOON:-15} * 60 )) ]; then
       pin5=1
@@ -423,10 +231,6 @@ if [ -n "$lim5" ]; then
 fi
 rest=$rs0
 
-# task-61: shared reset tail for the day-scale limit segments (weekly, model):
-# tenths of a day from 24h, tenth-hours from 90m (whole hours once tenths would
-# exceed four chars), whole minutes below; empty unless the reset lies in the
-# future. The 5h tail keeps its own inline form (no day tier, pin logic).
 mktail() {                                 # $1 = resets_at, $2 = color; sets TAIL
   local rs=$1 c=$2 rem t tv
   TAIL=""
@@ -442,120 +246,34 @@ mktail() {                                 # $1 = resets_at, $2 = color; sets TA
   else
     tv="$(( (rem + 30) / 60 ))m"
   fi
-  # Space after ⟳: a fallback-font glyph covers the next cell.
+  # Fallback glyphs cover the next cell.
   TAIL=" ${c}⟳ $(pad 4 "$tv")${R}"
 }
 
-# Weekly usage: shown whenever present, pinned from CC_RED.
-# task-61: superseded — the segment showed only from CC_AMBER and built the
-# reset tail inline (now mktail, shared with the model-scoped segment):
-# if [ -n "$lim7" ] && [ "$lim7" -ge "${CC_AMBER:-50}" ]; then
-#   WC=$(col "$lim7")
-#   seg7="${DIM}7d ${R}${WC}$(pad 4 "${lim7}%")${R}"
-#   case "$reset7" in *[!0-9]*) reset7="" ;; esac
-#   if [ -n "$reset7" ] && [ "$reset7" -gt "$now" ]; then
-#     rem7=$(( reset7 - now ))
-#     if [ "$rem7" -ge 86400 ]; then                   # tenths of a day
-#       t=$(( (rem7 + 4320) / 8640 )); tv="$(( t / 10 )).$(( t % 10 ))d"
-#     elif [ "$rem7" -ge 5400 ]; then
-#       t=$(( (rem7 + 180) / 360 ))
-#       if [ "$t" -ge 100 ]; then tv="$(( (rem7 + 1800) / 3600 ))h"   # keeps four chars
-#       else tv="$(( t / 10 )).$(( t % 10 ))h"; fi
-#     else
-#       tv="$(( (rem7 + 30) / 60 ))m"
-#     fi
-#     seg7="${seg7} ${WC}⟳ $(pad 4 "$tv")${R}"
-#   fi
-#   wk0="${sep}${seg7}"
-#   [ "$lim7" -ge "${CC_RED:-80}" ] && wk1=$wk0
-# fi
-# superseded — wk=""; wk0=""; wk1=""
-# superseded — wk=""; wk0=""; wk1=""; wk2=""        # wk2: dropped, even urgent
-# Tiers: wk1/wk2 drop the tail, wk3/wk4 the figure;
-# wk1 and wk3 keep an urgent (CC_RED) one.
+# Weekly tiers drop tail, then figure; odd ones pin urgent.
 wk=""; wk0=""; wk1=""; wk2=""; wk3=""; wk4=""
 if [ -n "$lim7" ]; then
   WC=$(col "$lim7" 7d)
   mktail "$reset7" "$WC"
-  # superseded — seg7="${DIM}7d ${R}${WC}$(pad 4 "${lim7}%")${R}${TAIL}"
-  # superseded — wk0="${sep}${seg7}"
-  # superseded — [ "$lim7" -ge "${CC_RED:-80}" ] && wk1=$wk0
   seg7="${DIM}7d ${R}${WC}$(pad 4 "${lim7}%")${R}"
   wk0="${sep}${seg7}${TAIL}"; wk1="${sep}${seg7}"; wk2=$wk1
   [ "$lim7" -ge "${CC_RED:-80}" ] && { wk1=$wk0; wk3=$wk2; }
 fi
 wk=$wk0
 
-# superseded — the usage-snapshot fallback (refreshes only on /usage):
-# # Usage-cache fallback: weekly_scoped limits from the /usage snapshot.
-# # Shown for any current model; a matching one is preferred.
-# # Memoized on the config's size, mtime and the model id.
-# # superseded — staleM=0
-# if [ "$usecfg" = 1 ]; then
-#   uf="$CACHE_DIR/usage"; ckey="${cszmt:-0 0} ${modelid:--}"
-#   psz=""; pmt=""; pmid=""; fetchedM=0
-#   [ -f "$uf" ] && IFS=' ' read -r psz pmt pmid limM resetM fetchedM aliasM < "$uf" 2>/dev/null
-#   if [ -z "$cszmt" ] || [ "$psz $pmt $pmid" != "$ckey" ]; then
-#     IFS=' ' read -r limM resetM fetchedM aliasM < <(jq -r --arg m "$modelid $model" '
-#       (.cachedUsageUtilization // {}) as $c
-#       | select(($c.accountUuid // "") == (.oauthAccount.accountUuid // ""))
-#       | ($m | ascii_downcase) as $ml
-#       | [ $c.utilization.limits[]?
-#           | select(.kind == "weekly_scoped" and (.percent | type) == "number"
-#                    and ((.scope.model.display_name // "") | length) > 0)
-#           | (.scope.model.display_name | ascii_downcase) as $a
-#           | { a: $a, p: (.percent | floor),
-#               r: ((.resets_at // "") | try (sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z")
-#                                             | fromdateiso8601 | floor) catch 0),
-#               k: ($ml | test("\\b" + ($a | gsub("[^a-z0-9]+"; "[-_ ]")) + "\\b")) } ]
-#       | (map(select(.k)) + .) | first // empty
-#       | "\(.p) \(.r) \(($c.fetchedAtMs // 0) / 1000 | floor) \(.a)"' "$cfg" 2>/dev/null)
-#     [ -n "$limM" ] || { limM="-"; resetM=0; fetchedM=0; aliasM=""; }
-#     mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s %s %s %s %s\n' \
-#       "$ckey" "$limM" "$resetM" "$fetchedM" "$aliasM" > "$uf" 2>/dev/null
-#   fi
-#   case "$limM" in ''|*[!0-9]*) limM=""; aliasM="" ;; esac
-#   case "$resetM" in ''|*[!0-9]*) resetM=0 ;; esac
-#   case "$fetchedM" in ''|*[!0-9]*) fetchedM=0 ;; esac
-#   # A rolled-over window invalidates the snapshot.
-#   [ "$resetM" -gt 0 ] && [ "$resetM" -le "$now" ] && { limM=""; aliasM=""; }
-#   # superseded — [ $(( now - fetchedM )) -gt 3600 ] && staleM=1      # older than 1h: dim
-# fi
-
-# Model-scoped usage (task-61): alias and figures come from the jq pass at the
-# top. Rendered after the weekly segment with the alias as its dim label
-# (e.g. "fable  36%"); pinned from CC_RED like the weekly one.
-# superseded — md=""; md0=""; md1=""
-# superseded — md=""; md0=""; md1=""; md2=""        # md2: dropped, even urgent
-# Tiers as for the weekly segment (md1..md4).
+# Model-scoped limit; tiers as the weekly one.
 md=""; md0=""; md1=""; md2=""; md3=""; md4=""
 if [ -n "$limM" ] && [ -n "$aliasM" ]; then
-  # superseded — MC=$(col "$limM")
-  # superseded — MC=$(col "$limM"); [ "$staleM" = 1 ] && MC=$DIM
   MC=$(col "$limM" md)
   mktail "$resetM" "$MC"
-  # superseded — segm="${DIM}${aliasM} ${R}${MC}$(pad 4 "${limM}%")${R}${TAIL}"
-  # superseded — md0="${sep}${segm}"
-  # superseded — [ "$limM" -ge "${CC_RED:-80}" ] && md1=$md0
   segm="${DIM}${aliasM} ${R}${MC}$(pad 4 "${limM}%")${R}"
   md0="${sep}${segm}${TAIL}"; md1="${sep}${segm}"; md2=$md1
   [ "$limM" -ge "${CC_RED:-80}" ] && { md1=$md0; md3=$md2; }
 fi
 md=$md0
 
-# git branch — task-35: parsed from the repository's HEAD file; spawning git put
-# its name into terminal title bars on every render. Walk up from cwd to .git,
-# follow a "gitdir:" pointer file (worktree, submodule), then read HEAD: a
-# "ref: refs/heads/..." line is the branch — present even on an unborn branch,
-# which symbolic-ref also showed — and a bare hash is a detached HEAD, shown as
-# its first seven digits.
-# task-35: superseded — br=$(git -C "$cwd" symbolic-ref --quiet --short HEAD 2>/dev/null)
-# task-35: superseded — sha=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
-# task-35: superseded — [ -n "$sha" ] && br="(${sha})"
-# superseded — br0=""; br1=""
-# superseded — br0=""; br1=""; br2=""               # br2: dropped
-# brf: flex tier, measured without the branch, which then
-# takes the room left, down to brfloor columns.
+# Read .git/HEAD directly; no git spawn.
+# brf: the branch takes the room left, down to brfloor.
 br0=""; br1=""; br2=""; brf=""; brfloor=0
 if [ -n "$cwd" ]; then
   br=""; gd=""; d=$cwd
@@ -577,87 +295,33 @@ if [ -n "$cwd" ]; then
       ?*)                  br="(${hd:0:7})" ;;         # detached
     esac
   fi
-  # task-39: two width tiers. br0 caps at CC_BRANCH_MAX as before; br1 caps at
-  # CC_BRANCH_MIN and is chosen by the collapse ladder after the token tiers are
-  # exhausted, before the context tiers collapse. Both carry their leading sep.
-  # task-39: superseded — [ "${#br}" -gt "$BRMAX" ] && br="${br:0:$((BRMAX-1))}…"
-  # task-39: superseded — rest="${rest}${sep}${DIM}⎇ ${br}${R}"
   if [ -n "$br" ]; then
     BRMAX=${CC_BRANCH_MAX:-18}
-    # superseded — BRMIN=${CC_BRANCH_MIN:-10}
     BRMIN=${CC_BRANCH_MIN:-1}                 # fewest letters kept
     case "$BRMIN" in ''|*[!0-9]*|0) BRMIN=1 ;; esac
     b=$br
     [ "${#b}" -gt "$BRMAX" ] && b="${b:0:$((BRMAX-1))}…"
     br0="${sep}${DIM}⎇ ${b}${R}"
-    # superseded — b=$br
-    # superseded — [ "${#b}" -gt "$BRMIN" ] && b="${b:0:$((BRMIN-1))}…"
-    # superseded — br1="${sep}${DIM}⎇ ${b}${R}"
     brfloor=$(( BRMIN + 1 )); [ "${#br}" -le "$BRMIN" ] && brfloor=${#br}
   fi
 fi
 
-# task-25: superseded — the cost segment (the API-rate value of the session's tokens,
-# not a subscription charge) is removed to save fixed width. Kept commented for a
-# possible restore.
-# cost — task-11: LC_ALL=C so the dotted JSON value is parsed and formatted with a
-# period. A comma-locale printf fails on '1.23' with 'invalid number', and the awk
-# guard would misparse a sub-dollar cost to 0 and hide the segment.
-# if LC_ALL=C awk -v c="$cost" 'BEGIN{exit !(c+0 > 0.0001)}'; then
-#   out="${out}${sep}${DIM}$(pad 7 "$(LC_ALL=C printf '$%.2f' "$cost")")${R}"
-# fi
-
-# task-16: superseded — cache-warmth (⧗) segment removed to save status-line width.
-# Analysis shows Claude Code sessions cache with a 1h TTL essentially always, so a
-# constantly-shown countdown adds little actionable value. The block is kept
-# commented for a possible restore; CC_TTL no longer affects the output.
-# if [ -n "$tpath" ] && [ -f "$tpath" ]; then
-#   mt=$(stat -c %Y "$tpath" 2>/dev/null || stat -f %m "$tpath" 2>/dev/null)
-#   case "$mt" in ''|*[!0-9]*) mt="" ;; esac
-#   ttl=$(tail -n 2000 "$tpath" 2>/dev/null | tail -n +2 \
-#         | jq -c 'select(.type=="assistant" and ((.message.usage.cache_creation_input_tokens // 0) > 0))
-#                  | .message.usage.cache_creation
-#                  | if (.ephemeral_1h_input_tokens // 0) > 0 then 3600
-#                    elif (.ephemeral_5m_input_tokens // 0) > 0 then 300
-#                    else empty end' 2>/dev/null | tail -1)
-#   # task-8: superseded — [ -n "$ttl" ] || ttl=${CC_TTL:-300}
-#   [ -n "$ttl" ] || ttl=${CC_TTL:-3600}
-#   if [ -n "$mt" ]; then
-#     idle=$(( $(date +%s) - mt ))
-#     if [ "$idle" -lt "$ttl" ]; then
-#       out="${out}${sep}$(col 0)⧗ $(pad 3 "$(( (ttl - idle + 59) / 60 ))m")${R}"
-#     else
-#       # task-8: superseded — out="${out}${sep}${DIM}⧗ $(pad 3 "∞")${R}"
-#       out="${out}${sep}${DIM}⧗ $(pad 3 "—")${R}"
-#     fi
-#   fi
-# fi
-
-# task-21: announce a just-applied self-update once. task-20's background writes the
-# new version to CACHE_DIR/applied-version after an atomic replace; show a ⇧ vX.Y
-# marker on the next render and record it in announced-version so it shows only once.
-# Reads state from the previous run; no network, outside the fixed-width segments.
-# task-37: the marker gets its own tail variable so the token segment can render
-# after the branch; the marker stays the last element of the line.
+# ⇧ vX.Y once after a self-update.
 tailseg=""
 if [ -f "$CACHE_DIR/applied-version" ]; then
-  # task-35: superseded — av=$(cat "$CACHE_DIR/applied-version" 2>/dev/null)
-  # task-35: superseded — ann=$(cat "$CACHE_DIR/announced-version" 2>/dev/null)
   av=""; ann=""
   IFS= read -r av < "$CACHE_DIR/applied-version" 2>/dev/null
   [ -f "$CACHE_DIR/announced-version" ] && IFS= read -r ann < "$CACHE_DIR/announced-version" 2>/dev/null
   if [ -n "$av" ] && [ "$av" != "$ann" ]; then
-    # task-37: superseded — rest="${rest}${sep}$(col 0)⇧ v${av}${R}"
-    # superseded — tailseg="${sep}$(col 0)⇧ v${av}${R}"
     tailseg="${sep}${GRN}⇧ v${av}${R}"
     printf '%s' "$av" > "$CACHE_DIR/announced-version" 2>/dev/null
   fi
 fi
 
-# Remote Control: the CLI exports the bridge id while attached.
+# rc while Remote Control is attached.
 rcseg=""
 if [ -n "${CLAUDE_CODE_BRIDGE_SESSION_ID:-}" ]; then
-  # The CLI's success green; inside tmux it renders 256-color.
+  # The CLI's green; 256-color inside tmux.
   if [ -n "${TMUX:-}" ] && [ -z "${CLAUDE_CODE_TMUX_TRUECOLOR:-}" ]; then
     RCC=$'\033[38;5;114m'
   else
@@ -666,114 +330,27 @@ if [ -n "${CLAUDE_CODE_BRIDGE_SESSION_ID:-}" ]; then
   rcseg="${sep}${RCC}rc${R}"
 fi
 
-# task-26: choose the widest context+tokens combination whose whole line fits $COLUMNS
-# (Claude Code exports it, >= 2.1.153). cols=0 (unset, older Claude Code) or CC_COMPACT=0
-# keeps the full bar, matching the prior output. Visible width strips ANSI SGR and UTF-8
-# continuation bytes so each multi-byte cell (█ ░ · ⎇) counts as one column, and is
-# measured against the fully assembled line including tokens, 5h, branch, and markers.
-# task-32: the ladder also collapses the token-throughput segment (tok0->tok1->tok2);
-# task-49 puts the bar ahead of it in the order. See the tier list below.
+# --- collapse: the widest tier that fits ---
 cols=${COLUMNS:-0}
 ctx="$ctx0"; tok="$tok0"; brseg="$br0"
 if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
-  # task-46: the renderer draws the status line inside a padded box (paddingLeft 2,
-  # paddingRight 1-2 as of Claude Code 2.1.220) while COLUMNS carries the full
-  # terminal width, so a line within a few columns of COLUMNS was ellipsized by
-  # the renderer rather than collapsed here. The ladder fits the line into COLUMNS
-  # minus a reserve: CC_RESERVE overrides the default 4 (2 left + 2 right);
-  # 0 restores the pre-reserve comparison.
-  budget=$(( cols - ${CC_RESERVE:-4} ))
-  # task-32: superseded — the collapse iterated context tiers only:
-  #   for cand in "$ctx0" "$ctx1" "$ctx2"; do ctx="$cand"; measure "${head}${ctx}${rest}"; done
-  # task-39: the walk covers (ctx,tok,branch) trios. task-49 orders them by how much
-  # each segment duplicates what the line already shows: the bar goes first because it
-  # renders the percentage printed beside it — task-50 narrows it through CELLS1 and
-  # CELLS2 before removing it — then write, then read, then the branch
-  # shortens to CC_BRANCH_MIN, and the percentage goes last — the cumulative token
-  # figures appear nowhere else in the interface, so they outrank the bar. Unless
-  # CC_TOKENS=1 the tok tiers are empty and the walk degenerates accordingly.
-  # Indirect ${!name} expands the tier variables named in each trio.
-  # task-48: measuring inside the walk spawned one awk per candidate — up to six per
-  # render on a narrow terminal, on top of the jq and stat spawns. Terminal title bars
-  # that display the tty's frontmost process flashed the name once per candidate. Every
-  # candidate is now assembled first and measured in a single awk pass that prints one
-  # visible width per line; the walk over those widths is shell-only. task-48 changed the
-  # measurement only: it left the tier list and the fit test it inherited as they stood,
-  # down to the fall-through to the narrowest tier when none of them fits. task-49 and
-  # task-50 reordered and extended the tiers afterwards; the list below is the order in
-  # force, and no comment here claims it matches an earlier revision.
-  # task-39: superseded — for pair in "ctx0 tok0" "ctx0 tok1" "ctx0 tok2" "ctx1 tok2" "ctx2 tok2"; do
-  # task-39: superseded —   cn=${pair% *}; tn=${pair#* }; ctx=${!cn}; tok=${!tn}
-  # task-48: superseded — for trio in "ctx0 tok0 br0" "ctx0 tok1 br0" "ctx0 tok2 br0" "ctx0 tok2 br1" "ctx1 tok2 br1" "ctx2 tok2 br1"; do
-  # task-48: superseded —   read -r cn tn bn <<< "$trio"
-  # task-48: superseded —   ctx=${!cn}; tok=${!tn}; brseg=${!bn}
-  # task-37: superseded — vis=$(printf '%s' "${head}${ctx}${tok}${rest}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
-  # task-48: superseded —   vis=$(printf '%s' "${head}${ctx}${rest}${brseg}${tok}${tailseg}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
-  # task-46: superseded — [ "$vis" -le "$cols" ] && break
-  # task-48: superseded —   [ "$vis" -le "$budget" ] && break
-  # task-48: superseded — done
-  # task-49: superseded — the bar outlived both token figures and the full branch:
-  # tiers=("ctx0 tok0 br0" "ctx0 tok1 br0" "ctx0 tok2 br0" "ctx0 tok2 br1" "ctx1 tok2 br1" "ctx2 tok2 br1")
-  # task-50: superseded — the bar was all-or-nothing (ctx1 was the bar-less tier):
-  # tiers=("ctx0 tok0 br0" "ctx1 tok0 br0" "ctx1 tok1 br0" "ctx1 tok2 br0" "ctx1 tok2 br1" "ctx2 tok2 br1")
-  # superseded — tiers=("ctx0 tok0 br0" "ctx1 tok0 br0" "ctx2 tok0 br0" "ctx3 tok0 br0" \
-  # superseded —        "ctx3 tok1 br0" "ctx3 tok2 br0" "ctx3 tok2 br1" "ctx4 tok2 br1")
-  # A non-urgent reset tail drops right after the bar.
-  # superseded — tiers=("ctx0 tok0 br0 rs0" "ctx1 tok0 br0 rs0" "ctx2 tok0 br0 rs0" "ctx3 tok0 br0 rs0" \
-  # superseded —        "ctx3 tok0 br0 rs1" "ctx3 tok1 br0 rs1" "ctx3 tok2 br0 rs1" "ctx3 tok2 br1 rs1" \
-  # superseded —        "ctx4 tok2 br1 rs1")
-  # superseded — a non-urgent weekly segment dropped right after the tail:
-  # tiers=("ctx0 tok0 br0 rs0 wk0" "ctx1 tok0 br0 rs0 wk0" "ctx2 tok0 br0 rs0 wk0" \
-  #        "ctx3 tok0 br0 rs0 wk0" "ctx3 tok0 br0 rs1 wk0" "ctx3 tok0 br0 rs1 wk1" \
-  #        "ctx3 tok1 br0 rs1 wk1" "ctx3 tok2 br0 rs1 wk1" "ctx3 tok2 br1 rs1 wk1" \
-  #        "ctx4 tok2 br1 rs1 wk1")
-  # task-61: after the tail, the non-urgent model-scoped segment drops, then the
-  # non-urgent weekly segment.
-  # superseded — tiers=("ctx0 tok0 br0 rs0 wk0 md0" "ctx1 tok0 br0 rs0 wk0 md0" "ctx2 tok0 br0 rs0 wk0 md0" \
-  # superseded —        "ctx3 tok0 br0 rs0 wk0 md0" "ctx3 tok0 br0 rs1 wk0 md0" "ctx3 tok0 br0 rs1 wk0 md1" \
-  # superseded —        "ctx3 tok0 br0 rs1 wk1 md1" "ctx3 tok1 br0 rs1 wk1 md1" "ctx3 tok2 br0 rs1 wk1 md1" \
-  # superseded —        "ctx3 tok2 br1 rs1 wk1 md1" "ctx4 tok2 br1 rs1 wk1 md1")
-  # The effort shortens (hd1) once the bar is gone.
-  # superseded — tiers=("ctx0 tok0 br0 rs0 wk0 md0 hd0" "ctx1 tok0 br0 rs0 wk0 md0 hd0" "ctx2 tok0 br0 rs0 wk0 md0 hd0" \
-  # superseded —        "ctx3 tok0 br0 rs0 wk0 md0 hd0" "ctx3 tok0 br0 rs0 wk0 md0 hd1" "ctx3 tok0 br0 rs1 wk0 md0 hd1" \
-  # superseded —        "ctx3 tok0 br0 rs1 wk0 md1 hd1" "ctx3 tok0 br0 rs1 wk1 md1 hd1" "ctx3 tok1 br0 rs1 wk1 md1 hd1" \
-  # superseded —        "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx3 tok2 br1 rs1 wk1 md1 hd1" "ctx4 tok2 br1 rs1 wk1 md1 hd1")
-  # superseded — phone widths: the branch went, the context became the bare
-  # superseded — percent, then urgent pins dropped (5h tail, model, weekly):
-  # tiers=("ctx0 tok0 br0 rs0 wk0 md0 hd0" "ctx1 tok0 br0 rs0 wk0 md0 hd0" "ctx2 tok0 br0 rs0 wk0 md0 hd0" \
-  #        "ctx3 tok0 br0 rs0 wk0 md0 hd0" "ctx3 tok0 br0 rs0 wk0 md0 hd1" "ctx3 tok0 br0 rs1 wk0 md0 hd1" \
-  #        "ctx3 tok0 br0 rs1 wk0 md1 hd1" "ctx3 tok0 br0 rs1 wk1 md1 hd1" "ctx3 tok1 br0 rs1 wk1 md1 hd1" \
-  #        "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx3 tok2 br1 rs1 wk1 md1 hd1" "ctx4 tok2 br1 rs1 wk1 md1 hd1" \
-  #        "ctx4 tok2 br2 rs1 wk1 md1 hd1" "ctx5 tok2 br2 rs1 wk1 md1 hd1" "ctx5 tok2 br2 rs2 wk1 md1 hd1" \
-  #        "ctx5 tok2 br2 rs2 wk1 md2 hd1" "ctx5 tok2 br2 rs2 wk2 md2 hd1")
-  # Percentages go last: tails (5h, model, weekly), tokens, the
-  # context count, the branch, urgent tails, then the figures.
+  budget=$(( cols - ${CC_RESERVE:-4} ))      # minus the renderer's padding
+  # Drop order: bar, effort, tails, tokens, count, branch, figures.
   tiers=("ctx0 tok0 br0 rs0 wk0 md0 hd0" "ctx1 tok0 br0 rs0 wk0 md0 hd0" "ctx2 tok0 br0 rs0 wk0 md0 hd0" \
          "ctx3 tok0 br0 rs0 wk0 md0 hd0" "ctx3 tok0 br0 rs0 wk0 md0 hd1" "ctx3 tok0 br0 rs1 wk0 md0 hd1" \
          "ctx3 tok0 br0 rs1 wk0 md1 hd1" "ctx3 tok0 br0 rs1 wk1 md1 hd1" "ctx3 tok1 br0 rs1 wk1 md1 hd1" \
-         "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx5 tok2 brf rs1 wk1 md1 hd1" \
-         "ctx5 tok2 br2 rs1 wk1 md1 hd1" "ctx5 tok2 br2 rs2 wk1 md1 hd1" "ctx5 tok2 br2 rs2 wk1 md2 hd1" \
-         "ctx5 tok2 br2 rs2 wk2 md2 hd1" "ctx5 tok2 br2 rs2 wk2 md3 hd1" "ctx5 tok2 br2 rs2 wk3 md3 hd1" \
-         "ctx5 tok2 br2 rs2 wk3 md4 hd1" "ctx5 tok2 br2 rs2 wk4 md4 hd1")
-  # superseded — "ctx5 tok2 br0 ..." then "ctx5 tok2 br1 ..." (fixed 10-letter step)
+         "ctx3 tok2 br0 rs1 wk1 md1 hd1" "ctx4 tok2 brf rs1 wk1 md1 hd1" \
+         "ctx4 tok2 br2 rs1 wk1 md1 hd1" "ctx4 tok2 br2 rs2 wk1 md1 hd1" "ctx4 tok2 br2 rs2 wk1 md2 hd1" \
+         "ctx4 tok2 br2 rs2 wk2 md2 hd1" "ctx4 tok2 br2 rs2 wk2 md3 hd1" "ctx4 tok2 br2 rs2 wk3 md3 hd1" \
+         "ctx4 tok2 br2 rs2 wk3 md4 hd1" "ctx4 tok2 br2 rs2 wk4 md4 hd1")
   cands=()
   for trio in "${tiers[@]}"; do
-    # superseded — read -r cn tn bn <<< "$trio"
-    # superseded — cands+=("${head}${!cn}${rest}${!bn}${!tn}${tailseg}")
-    # superseded — read -r cn tn bn rn <<< "$trio"
-    # superseded — cands+=("${head}${!cn}${!rn}${!bn}${!tn}${tailseg}")
-    # task-61: superseded — read -r cn tn bn rn kn <<< "$trio"
-    # task-61: superseded — cands+=("${head}${!cn}${!rn}${!kn}${!bn}${!tn}${tailseg}")
-    # superseded — read -r cn tn bn rn kn mn <<< "$trio"
-    # superseded — cands+=("${head}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${tailseg}")
-    # superseded — cands+=("${head}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${rcseg}${tailseg}")
     read -r cn tn bn rn kn mn hn <<< "$trio"
     cands+=("${!hn}${!cn}${!rn}${!kn}${!mn}${!bn}${!tn}${rcseg}${tailseg}")
   done
-  sel=$(( ${#tiers[@]} - 1 ))               # none fits -> the narrowest tier, as before
+  sel=$(( ${#tiers[@]} - 1 ))               # none fits: the narrowest
   i=0; brroom=0
   while IFS= read -r vis; do
-    # superseded — [ "$vis" -le "$budget" ] && { sel=$i; break; }
     case " ${tiers[$i]} " in
       *" brf "*)                              # " · ⎇ " takes 5 columns
         brroom=$(( budget - vis - 5 ))
@@ -783,14 +360,6 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
     esac
     i=$((i+1))
   done < <(printf '%s\n' "${cands[@]}" | LC_ALL=C awk '{s=$0; gsub(/\033\[[0-9;]*m/,"",s); gsub(/[\200-\277]/,"",s); print length(s)}')
-  # superseded — read -r cn tn bn <<< "${tiers[$sel]}"
-  # superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}
-  # superseded — read -r cn tn bn rn <<< "${tiers[$sel]}"
-  # superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}
-  # task-61: superseded — read -r cn tn bn rn kn <<< "${tiers[$sel]}"
-  # task-61: superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}
-  # superseded — read -r cn tn bn rn kn mn <<< "${tiers[$sel]}"
-  # superseded — ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}; md=${!mn}
   read -r cn tn bn rn kn mn hn <<< "${tiers[$sel]}"
   ctx=${!cn}; tok=${!tn}; brseg=${!bn}; rest=${!rn}; wk=${!kn}; md=${!mn}; head=${!hn}
   if [ "$bn" = brf ] && [ -n "$br" ]; then  # one letter at a time
@@ -799,31 +368,13 @@ if [ "${CC_COMPACT:-1}" != "0" ] && [ "$cols" -gt 0 ]; then
     brseg="${sep}${DIM}⎇ ${b}${R}"
   fi
 fi
-# task-37: the token tiers render after rest (5h) and the branch instead of
-# between the context segment and rest; the collapse ladder still drops them first.
-# task-37: superseded — out="${head}${ctx}${tok}${rest}"
-# task-39: superseded — out="${head}${ctx}${rest}${tok}${tailseg}"
-# superseded — out="${head}${ctx}${rest}${brseg}${tok}${tailseg}"
-# task-61: superseded — out="${head}${ctx}${rest}${wk}${brseg}${tok}${tailseg}"
-# superseded — out="${head}${ctx}${rest}${wk}${md}${brseg}${tok}${tailseg}"
 out="${head}${ctx}${rest}${wk}${md}${brseg}${tok}${rcseg}${tailseg}"
 
 printf '%s' "$out"
 
-# task-20: spawn the once-a-day self-update, fully detached so it never delays this
-# render (the network runs in the background; the foreground work here is only a
-# stat and a touch). The stamp is written now so a failed or slow check still waits
-# a day before retrying. Guarded by CC_AUTO_UPDATE (opt-in, decision-3) and curl's
-# presence.
-# task-35: RANDOM samples the age gate at ~1/20 of renders so its date+stat pair
-# does not spawn on every render; the daily stamp still bounds real checks to one
-# per day, and the sampling only delays the day rollover by a few renders.
-# task-33: superseded — if [ "${CC_AUTO_UPDATE:-1}" != "0" ] && command -v curl >/dev/null 2>&1; then
-# task-35: superseded — if [ "${CC_AUTO_UPDATE:-0}" = "1" ] && command -v curl >/dev/null 2>&1; then
+# Daily check; RANDOM thins the stat to 1/20 of renders.
 if [ "${CC_AUTO_UPDATE:-0}" = "1" ] && [ $(( RANDOM % 20 )) -eq 0 ] && command -v curl >/dev/null 2>&1; then
-  # task-38: superseded — stamp="$CACHE_DIR/last-check"; now=$(date +%s); last=0
-  stamp="$CACHE_DIR/last-check"; last=0    # now comes from the top-of-script clock
-  # task-35: superseded — last=$(stat -c %Y "$stamp" 2>/dev/null || stat -f %m "$stamp" 2>/dev/null || printf 0)
+  stamp="$CACHE_DIR/last-check"; last=0
   if [ -f "$stamp" ]; then
     case "$OSTYPE" in
       darwin*|*bsd*) last=$(stat -f %m "$stamp" 2>/dev/null) ;;
@@ -832,7 +383,7 @@ if [ "${CC_AUTO_UPDATE:-0}" = "1" ] && [ $(( RANDOM % 20 )) -eq 0 ] && command -
   fi
   case "$last" in ''|*[!0-9]*) last=0 ;; esac
   if [ "$(( now - last ))" -ge 86400 ]; then
-    mkdir -p "$CACHE_DIR" 2>/dev/null && : > "$stamp" 2>/dev/null
+    mkdir -p "$CACHE_DIR" 2>/dev/null && : > "$stamp" 2>/dev/null   # a failure waits a day
     ( self_update & ) </dev/null >/dev/null 2>&1
   fi
 fi
