@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Claude Code status line; session JSON on stdin.
-VERSION=1.9
 input=""; IFS= read -rd '' input
 # One jq pass; spawns flash in terminal title bars.
 # Last three fields: the model-scoped limit, matched by alias.
@@ -100,29 +99,30 @@ CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/claude-code-status-bar"
 now=$(printf '%(%s)T' -1 2>/dev/null)
 case "$now" in ''|*[!0-9]*) now=$(date +%s) ;; esac
 
-vgt() { # true iff $1 is newer than $2
-  awk -v a="$1" -v b="$2" 'BEGIN{
-    na=split(a,A,"."); nb=split(b,B,".");
-    n=(na>nb?na:nb);
-    for(i=1;i<=n;i++){x=(i<=na?A[i]+0:0);y=(i<=nb?B[i]+0:0);
-      if(x>y)exit 0; if(x<y)exit 1}
-    exit 1}'
-}
-
+# A release published after the install replaces it.
 self_update() { # detached; failures are silent
-  local tag latest self dir tmp
-  tag=$(curl -fsSL --max-time 10 "https://api.github.com/repos/$CC_REPO/releases/latest" 2>/dev/null \
-        | jq -r '.tag_name // empty' 2>/dev/null)
+  local tag pub self mt dir tmp
+  IFS=' ' read -r tag pub < <(curl -fsSL --max-time 10 "https://api.github.com/repos/$CC_REPO/releases/latest" 2>/dev/null \
+        | jq -r '"\(.tag_name // "") \(.published_at // "" | try fromdateiso8601 catch 0)"' 2>/dev/null)
   [ -n "$tag" ] || return 0
-  latest=${tag#v}
-  vgt "$latest" "$VERSION" || return 0             # never downgrade
+  case "$pub" in ''|*[!0-9]*) return 0 ;; esac
   self="${SELF:-$0}"; [ -f "$self" ] || return 0   # SELF: test override
+  case "$OSTYPE" in
+    darwin*|*bsd*) mt=$(stat -f %m "$self" 2>/dev/null) ;;
+    *)             mt=$(stat -c %Y "$self" 2>/dev/null) ;;
+  esac
+  case "$mt" in ''|*[!0-9]*) mt=0 ;; esac
+  [ "$pub" -gt "$mt" ] || return 0                 # never downgrade
   dir=$(dirname "$self")
   tmp=$(mktemp "$dir/.statusline.XXXXXX" 2>/dev/null) || return 0
   if curl -fsSL --max-time 20 "https://raw.githubusercontent.com/$CC_REPO/$tag/statusline.sh" -o "$tmp" 2>/dev/null \
      && [ -s "$tmp" ] && bash -n "$tmp" 2>/dev/null; then
-    chmod +x "$tmp" 2>/dev/null
-    mv -f "$tmp" "$self" 2>/dev/null && printf '%s' "$latest" > "$CACHE_DIR/applied-version" 2>/dev/null
+    if cmp -s "$tmp" "$self"; then
+      rm -f "$tmp" 2>/dev/null; touch "$self" 2>/dev/null   # same content; mark it current
+    else
+      chmod +x "$tmp" 2>/dev/null
+      mv -f "$tmp" "$self" 2>/dev/null && printf '%s' "${tag#v}" > "$CACHE_DIR/applied-version" 2>/dev/null
+    fi
   else
     rm -f "$tmp" 2>/dev/null
   fi
@@ -298,7 +298,7 @@ if [ -n "$cwd" ]; then
   fi
 fi
 
-# ⇧ vX.Y once after a self-update.
+# ⇧ vX.Y.Z once after a self-update.
 tailseg=""
 if [ -f "$CACHE_DIR/applied-version" ]; then
   av=""; ann=""

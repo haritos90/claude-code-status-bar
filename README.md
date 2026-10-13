@@ -50,14 +50,17 @@ default; enable it with `CC_AUTO_UPDATE=1` in the `statusLine.command`:
     "statusLine": { "type": "command", "command": "CC_AUTO_UPDATE=1 bash ~/.claude/statusline.sh" }
 
 When enabled, at most once per day it checks the latest release in a detached
-background process — the render never waits on the network — and when a newer version
-is published it downloads and atomically replaces the installed script, validating it
-before the swap. The first render afterwards shows a `⇧ vX.Y` marker once.
+background process — the render never waits on the network. A release published
+after the installed file was last written is downloaded, validated, and atomically
+swapped in when its content differs. The first render afterwards shows a
+`⇧ vX.Y.Z` marker once.
 
-Releases are `v*` tags; the check reads the GitHub releases/latest API and compares
-it against the script's embedded `VERSION`. Updates require `curl`. Without
-`CC_AUTO_UPDATE=1` the installed version stays pinned until it is re-downloaded
-manually.
+Releases are `v*` tags following semantic versioning; the script carries no
+version of its own. The check reads the GitHub releases/latest API and compares
+the release's publication time with the installed file's modification time, so a
+file installed after the latest release, such as a checkout of main, is left alone
+until the next release. Updates require `curl`. Without `CC_AUTO_UPDATE=1` the
+installed script stays as it is until it is re-downloaded manually.
 
 ## Content
 
@@ -73,7 +76,7 @@ manually.
 | `⎇ main` | Git branch; capped at `CC_BRANCH_MAX`. Under width pressure it shortens one letter at a time down to its first `CC_BRANCH_MIN` letters (`⎇ m…`), then is dropped |
 | `r:2.4m w:16k` | Cumulative tokens read / written this session (read = input + cache reads + cache creation; write = output); shown only with `CC_TOKENS=1` |
 | `rc` | Remote Control is attached to the session (Claude Code sets `CLAUDE_CODE_BRIDGE_SESSION_ID`). Drawn in the green of Claude Code's `/rc` indicator: 256-color inside tmux, where Claude Code itself renders in 256 colors, truecolor elsewhere. Never dropped by the collapse |
-| `⇧ v1.7` | Shown once after a self-update, naming the new version |
+| `⇧ v1.9.1` | Shown once after a self-update, naming the new release |
 
 Numeric segments, the reset tail included, are right-padded to a fixed width, so
 the line does not shift as values change digit count.
