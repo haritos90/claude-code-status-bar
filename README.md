@@ -7,7 +7,7 @@ branch, and optional session token throughput.
 The status line renders on every update from the session JSON Claude Code pipes
 to it on stdin. A live session looks like this:
 
-    Opus 4.8 max · █░░░░░░  12% · 123k/1m ·  30% ⟳ 2.4h · ⎇ main
+    Opus 4.8 max · █░░░░░░  12% · 123k/1m ·  30% ⟳ 2.4h · ⎇ main · rc
 
 ## Requirements
 
@@ -110,26 +110,25 @@ absent, or with `CC_COMPACT=0`, the full line is always shown.
 
 Exercise it without a live session (from a checkout of this repository):
 
-    echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | bash statusline.sh
+    echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | CLAUDE_CODE_BRIDGE_SESSION_ID=1 bash statusline.sh
 
-    Opus 4.8 max · █░░░░░░  12% · 123k/1m ·  30% · ⎇ main
+    Opus 4.8 max · █░░░░░░  12% · 123k/1m ·  30% · ⎇ main · rc
 
 Constrain the width to watch it collapse. The bar narrows first:
 
-    echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | COLUMNS=55 bash statusline.sh
+    echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | COLUMNS=60 CLAUDE_CODE_BRIDGE_SESSION_ID=1 bash statusline.sh
 
-    Opus 4.8 max · █░░░░  12% · 123k/1m ·  30% · ⎇ main
+    Opus 4.8 max · █░░░░  12% · 123k/1m ·  30% · ⎇ main · rc
 
 then goes entirely, and the token count takes the fill color:
 
-    echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | COLUMNS=50 bash statusline.sh
+    echo '{"model":{"display_name":"Opus 4.8"},"effort":{"level":"max"},"context_window":{"total_input_tokens":123000,"context_window_size":1000000,"used_percentage":12},"rate_limits":{"five_hour":{"used_percentage":30}},"workspace":{"current_dir":"."}}' | COLUMNS=55 CLAUDE_CODE_BRIDGE_SESSION_ID=1 bash statusline.sh
 
-    Opus 4.8 max ·  12% · 123k/1m ·  30% · ⎇ main
+    Opus 4.8 max ·  12% · 123k/1m ·  30% · ⎇ main · rc
 
-The outputs assume Remote Control is not attached. Run from inside a Claude Code
-session that has it, the command inherits `CLAUDE_CODE_BRIDGE_SESSION_ID` and each
-line ends in `· rc`; replace `bash statusline.sh` with
-`env -u CLAUDE_CODE_BRIDGE_SESSION_ID bash statusline.sh` to reproduce them exactly.
+The commands set `CLAUDE_CODE_BRIDGE_SESSION_ID`, the variable Claude Code exports
+while Remote Control is attached, so the `rc` marker and the outputs are the same
+inside and outside a session. Omit it to render the line without the marker.
 
 ## Configuration
 
